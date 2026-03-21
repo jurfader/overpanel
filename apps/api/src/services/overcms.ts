@@ -12,7 +12,7 @@ import { promisify } from 'util'
 
 const execAsync = promisify(exec)
 
-const OVERCMS_REPO = 'https://github.com/jurfader/overCMS.git'
+const OVERCMS_REPO = 'https://github.com/jurfader/over-cms.git'
 const OVERCMS_BASE_DIR = '/opt/overcms-sites'
 
 function generatePassword(len = 24): string {
