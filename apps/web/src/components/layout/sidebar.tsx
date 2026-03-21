@@ -71,7 +71,11 @@ export function Sidebar() {
   const pathname = usePathname()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const fetchMe = useAuthStore((s) => s.fetchMe)
   const router = useRouter()
+
+  // Refresh user data (permissions, siteCount) on mount
+  useState(() => { fetchMe() })
 
   const handleLogout = async () => {
     await logout()
