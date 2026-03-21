@@ -9,7 +9,7 @@ import { Globe, Lock, ArrowLeft, X } from 'lucide-react'
 
 // ── Site types ─────────────────────────────────────────────────────────────────
 
-type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy'
+type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy' | 'overcms'
 
 interface SiteTypeOption {
   id: SiteType
