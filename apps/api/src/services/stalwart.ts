@@ -102,6 +102,7 @@ export async function createStalwartAccount(
     secrets: [password],
     quota: quotaMb * 1024 * 1024,
     description: displayName || email,
+    roles: ['user'],
   })
 }
 
