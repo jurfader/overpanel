@@ -19,7 +19,7 @@ export function useSocketStats() {
     const socket = io(API_URL, {
       auth: { token },
       path: '/socket.io',
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: 5,
     })
 
