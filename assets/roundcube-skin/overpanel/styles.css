@@ -1,265 +1,288 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   OVERPANEL Webmail — Complete Dark Glassmorphism Override
-   Matches OVERPANEL VPS Control Panel design exactly
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* OVERPANEL Webmail — Force Dark Mode + Complete Override
+   Targets Roundcube Elastic dark-mode CSS variables */
 
-/* ── Force dark everywhere ── */
-:root {
+/* Force dark mode */
+html { color-scheme: dark !important; }
+html, html.dark-mode, html:not(.dark-mode) {
+    /* ── Elastic dark mode variable overrides ── */
     --color-main: #E91E8C !important;
     --color-main-dark: #c4177a !important;
+    --color-black-shade-bg: #0A0A0F !important;
+    --color-font: #d0d0d0 !important;
     --color-link: #E91E8C !important;
     --color-link-hover: #9B26D9 !important;
-    --color-font: #d0d0d0 !important;
-    --color-black-shade-bg: #0A0A0F !important;
     --color-border: rgba(255,255,255,0.06) !important;
-    --color-list-selected-background: rgba(233,30,140,0.08) !important;
-    --color-toolbar-button-background-hover: rgba(233,30,140,0.1) !important;
-    --color-layout-border: rgba(255,255,255,0.06) !important;
+    --color-error: #ef4444 !important;
+    --color-success: #22c55e !important;
+    --color-warning: #fbbf24 !important;
+    --color-danger: #ef4444 !important;
+
+    /* Layout backgrounds */
     --color-layout-header-background: #0A0A0F !important;
     --color-layout-sidebar-background: #0A0A0F !important;
     --color-layout-list-background: #0A0A0F !important;
-    --color-layout-content-background: #0A0A0F !important;
+    --color-layout-content-background: #0C0C16 !important;
+    --color-layout-border: rgba(255,255,255,0.06) !important;
+    --color-layout-mobile-header-background: #0A0A0F !important;
+
+    /* List */
+    --color-list-border: rgba(255,255,255,0.04) !important;
+    --color-list-selected-background: rgba(233,30,140,0.08) !important;
+    --color-list-flagged-background: rgba(251,191,36,0.06) !important;
+    --color-list-deleted-background: rgba(239,68,68,0.04) !important;
+    --color-list-unread-background: transparent !important;
+    --color-list-pagenav-background: #0A0A0F !important;
+
+    /* Messages */
+    --color-message-background: rgba(14,14,24,0.9) !important;
+    --color-message-text: #ccc !important;
+    --color-message-border: rgba(255,255,255,0.06) !important;
+    --color-message-information: rgba(59,130,246,0.1) !important;
+    --color-message-success: rgba(34,197,94,0.1) !important;
+    --color-message-warning: rgba(251,191,36,0.1) !important;
+    --color-message-error: rgba(239,68,68,0.1) !important;
+    --color-message-loading: rgba(233,30,140,0.1) !important;
+
+    /* Form */
+    --color-input-background: rgba(255,255,255,0.03) !important;
+    --color-input-background-focus: rgba(255,255,255,0.05) !important;
     --color-input-border: rgba(255,255,255,0.1) !important;
     --color-input-border-focus: rgba(233,30,140,0.4) !important;
-    --color-checkbox: #E91E8C !important;
+    --color-input-border-invalid: rgba(239,68,68,0.5) !important;
+    --color-checkbox: rgba(255,255,255,0.15) !important;
     --color-checkbox-checked: #E91E8C !important;
-    --color-message-unread: #f0f0f0 !important;
-    --color-list-border: rgba(255,255,255,0.04) !important;
-    --color-warning: #fbbf24 !important;
-    --color-error: #ef4444 !important;
-    --color-success: #22c55e !important;
-    --color-error-text: #fca5a5 !important;
-    color-scheme: dark !important;
+    --color-checkbox-checked-disabled: rgba(233,30,140,0.3) !important;
+
+    /* Toolbar */
+    --color-toolbar-button-background-hover: rgba(233,30,140,0.08) !important;
+
+    /* Dialogs */
+    --color-dialog-overlay-background: rgba(0,0,0,0.7) !important;
+
+    /* Popups */
+    --color-popover-background: rgba(14,14,24,0.95) !important;
+    --color-popover-border: rgba(255,255,255,0.1) !important;
+    --color-popover-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;
+
+    /* Datepicker */
+    --color-datepicker-selected: #E91E8C !important;
+    --color-datepicker-selected-background: rgba(233,30,140,0.15) !important;
+
+    /* Fonts */
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 }
 
-html, body { background: #0A0A0F !important; color: #d0d0d0 !important; }
-
-/* ═══ LAYOUT ═══ */
+/* ═══ GLOBAL ═══ */
+body { background: #0A0A0F !important; color: #d0d0d0 !important; }
 #layout { background: #0A0A0F !important; }
 #layout > div { border-color: rgba(255,255,255,0.06) !important; }
+a { color: #E91E8C !important; }
+a:hover { color: #9B26D9 !important; }
+h1, h2, h3, h4, h5 { color: #f0f0f0 !important; }
+label { color: #999 !important; }
+hr { border-color: rgba(255,255,255,0.04) !important; }
 
-/* ═══ LEFT ICON BAR (taskmenu) — matches panel sidebar ═══ */
+/* ═══ TASKMENU (left icon bar) ═══ */
 #taskmenu {
     background: #0A0A0F !important;
     border-right: 1px solid rgba(255,255,255,0.06) !important;
-    width: 60px !important;
 }
 #taskmenu a {
-    color: #666 !important;
-    margin: 3px 8px !important;
+    color: #555 !important;
     border-radius: 12px !important;
+    margin: 3px 6px !important;
     transition: all 0.2s !important;
-    height: 42px !important;
 }
-#taskmenu a::before { color: #666 !important; font-size: 18px !important; }
-#taskmenu a:hover { background: rgba(255,255,255,0.05) !important; }
-#taskmenu a:hover::before { color: #bbb !important; }
+#taskmenu a::before { color: #555 !important; }
+#taskmenu a:hover { background: rgba(255,255,255,0.04) !important; }
+#taskmenu a:hover::before { color: #aaa !important; }
 #taskmenu a.selected {
-    background: linear-gradient(135deg, rgba(233,30,140,0.08), rgba(155,38,217,0.05)) !important;
-    border: 1px solid rgba(233,30,140,0.15) !important;
+    background: linear-gradient(135deg, rgba(233,30,140,0.08), rgba(155,38,217,0.04)) !important;
+    border: 1px solid rgba(233,30,140,0.12) !important;
 }
 #taskmenu a.selected::before { color: #E91E8C !important; }
-#taskmenu a .inner { color: inherit !important; font-size: 9px !important; }
+#taskmenu .special-buttons a { color: #444 !important; }
+#taskmenu .special-buttons a:hover { color: #E91E8C !important; }
 
-/* ═══ SIDEBAR (folders) — glass card style ═══ */
-#layout-sidebar, .layout-sidebar, #mailboxcontainer {
+/* ═══ SIDEBAR ═══ */
+#layout-sidebar, .layout-sidebar {
     background: #0A0A0F !important;
     border-right: 1px solid rgba(255,255,255,0.06) !important;
 }
-#layout-sidebar .header, .layout-sidebar .header {
+#layout-sidebar .header {
     background: #0A0A0F !important;
     border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-    color: #ccc !important;
 }
-.folderlist, .treelist { background: transparent !important; }
-.folderlist li, .treelist li { border: none !important; }
-.folderlist li a, .treelist li a {
+#layout-sidebar .header .header-title { color: #888 !important; font-size: 13px !important; }
+.folderlist li a, .treelist li a, .listing.iconized li a {
     color: #888 !important;
     border-radius: 10px !important;
     margin: 1px 6px !important;
-    padding: 8px 12px !important;
+    padding: 7px 12px !important;
     transition: all 0.15s !important;
-    font-size: 13px !important;
 }
-.folderlist li a:hover, .treelist li a:hover {
-    background: rgba(255,255,255,0.04) !important;
+.folderlist li a:hover, .treelist li a:hover, .listing.iconized li a:hover {
+    background: rgba(255,255,255,0.03) !important;
     color: #ccc !important;
 }
-.folderlist li.selected > a, .treelist li.selected > a {
+.folderlist li.selected > a, .treelist li.selected > a, .listing.iconized li.selected > a {
     background: linear-gradient(135deg, rgba(233,30,140,0.06), rgba(155,38,217,0.03)) !important;
-    border: 1px solid rgba(233,30,140,0.12) !important;
+    border: 1px solid rgba(233,30,140,0.1) !important;
     color: #f0f0f0 !important;
 }
-.folderlist li.selected > a::before { color: #E91E8C !important; }
+.folderlist li.selected > a::before, .treelist li.selected > a::before {
+    color: #E91E8C !important;
+}
+/* Unread count badges */
 .folderlist li .unreadcount, .treelist li .unreadcount {
     background: linear-gradient(135deg, #E91E8C, #9B26D9) !important;
     color: #fff !important;
     border-radius: 8px !important;
     font-size: 10px !important;
     font-weight: 700 !important;
-    padding: 1px 6px !important;
     min-width: 20px !important;
+    padding: 1px 6px !important;
     text-align: center !important;
-    box-shadow: 0 0 8px rgba(233,30,140,0.2) !important;
+    box-shadow: 0 0 10px rgba(233,30,140,0.2) !important;
+    border: none !important;
 }
-/* Quota bar */
-.spacer, .quota-widget { background: rgba(255,255,255,0.03) !important; border-radius: 6px !important; }
-.quota-widget .bar { background: linear-gradient(90deg, #E91E8C, #9B26D9) !important; border-radius: 6px !important; }
+/* Quota */
+.quota-widget .bar { background: linear-gradient(90deg, #E91E8C, #9B26D9) !important; border-radius: 4px !important; }
+.quota-widget { background: rgba(255,255,255,0.03) !important; border-radius: 4px !important; }
+#layout-sidebar .footer { background: #0A0A0F !important; border-top: 1px solid rgba(255,255,255,0.06) !important; }
 
-/* ═══ TOOLBAR — matches panel topbar ═══ */
-.toolbar, .menu.toolbar, #layout > .header {
+/* ═══ HEADER / TOOLBAR ═══ */
+.header, #layout > div > .header {
     background: rgba(10,10,15,0.95) !important;
     border-bottom: 1px solid rgba(255,255,255,0.06) !important;
     backdrop-filter: blur(16px) !important;
     -webkit-backdrop-filter: blur(16px) !important;
 }
-.toolbar a.button {
-    color: #777 !important;
+.header .header-title { color: #ccc !important; font-weight: 600 !important; }
+.toolbar a.button, .toolbar .button {
+    color: #666 !important;
     border-radius: 10px !important;
-    margin: 2px 1px !important;
     transition: all 0.15s !important;
 }
-.toolbar a.button::before { color: #777 !important; }
-.toolbar a.button:hover {
-    background: rgba(255,255,255,0.05) !important;
-    color: #ddd !important;
-}
-.toolbar a.button:hover::before { color: #ddd !important; }
-.toolbar a.button.selected, .toolbar a.button:active {
-    background: rgba(233,30,140,0.08) !important;
-    color: #E91E8C !important;
-}
+.toolbar a.button::before { color: #666 !important; }
+.toolbar a.button:hover { background: rgba(255,255,255,0.04) !important; }
+.toolbar a.button:hover::before { color: #ccc !important; }
+.toolbar a.button.selected { background: rgba(233,30,140,0.06) !important; }
 .toolbar a.button.selected::before { color: #E91E8C !important; }
-.toolbar a.button.disabled { opacity: 0.25 !important; }
-.toolbar .separator, .toolbar .spacer { border-color: rgba(255,255,255,0.06) !important; }
+.toolbar a.button.disabled { opacity: 0.2 !important; }
+.toolbar .separator { border-color: rgba(255,255,255,0.06) !important; }
 
-/* ═══ MESSAGE LIST — clean dark table ═══ */
-#layout-list, .layout-list { background: #0A0A0F !important; }
-#layout-list .header { background: #0A0A0F !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
+/* ═══ MESSAGE LIST ═══ */
+#layout-list { background: #0A0A0F !important; }
+#layout-list .header { background: #0A0A0F !important; }
 .messagelist { background: transparent !important; }
 .messagelist tr { border-bottom: 1px solid rgba(255,255,255,0.03) !important; transition: background 0.1s !important; }
-.messagelist tr td { background: transparent !important; color: #888 !important; padding: 12px 10px !important; }
+.messagelist tr td { background: transparent !important; color: #777 !important; }
 .messagelist tr.unread td { color: #d0d0d0 !important; }
-.messagelist tr.unread td .subject a, .messagelist tr.unread td.subject a { color: #f0f0f0 !important; font-weight: 600 !important; }
-.messagelist tr td .subject a, .messagelist tr td.subject a { color: #999 !important; }
+.messagelist tr.unread td.subject span { color: #f0f0f0 !important; font-weight: 600 !important; }
+.messagelist tr.unread td.subject a { color: #f0f0f0 !important; font-weight: 600 !important; }
+.messagelist tr td.subject span, .messagelist tr td.subject a { color: #999 !important; }
 .messagelist tr.selected td { background: rgba(233,30,140,0.06) !important; }
 .messagelist tr.focused td { box-shadow: inset 3px 0 0 #E91E8C !important; }
-.messagelist tr:hover td { background: rgba(255,255,255,0.02) !important; }
-.messagelist td.date, .messagelist td .date { color: #555 !important; font-size: 12px !important; }
-.messagelist td.fromto, .messagelist td .fromto { color: #777 !important; }
+.messagelist tr:hover td { background: rgba(255,255,255,0.015) !important; }
+.messagelist td.date { color: #555 !important; }
+.messagelist td.fromto { color: #777 !important; }
+.messagelist td.size { color: #555 !important; }
 .messagelist thead td, .messagelist thead th {
     background: rgba(10,10,15,0.9) !important;
-    color: #555 !important;
+    color: #444 !important;
     font-size: 10px !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
     border-bottom: 1px solid rgba(255,255,255,0.06) !important;
 }
-/* Flag/attachment icons */
-.messagelist td.flag span, .messagelist td .flag span { color: #555 !important; }
-.messagelist td.flag span.flagged, .messagelist td .flag span.flagged { color: #fbbf24 !important; }
-.messagelist .attachment span::before { color: #555 !important; }
+.messagelist td .flag span { color: #444 !important; }
+.messagelist td .flag span.flagged { color: #fbbf24 !important; }
+.messagelist td.threads span { color: #444 !important; }
 
-/* ═══ MESSAGE CONTENT ═══ */
-#layout-content, .layout-content { background: #0E0E18 !important; }
+/* Search bar */
+.searchbar { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.06) !important; border-radius: 12px !important; margin: 6px !important; }
+.searchbar input { background: transparent !important; border: none !important; color: #ccc !important; }
+.searchbar a { color: #555 !important; }
+#searchmenu { background: rgba(14,14,24,0.95) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 14px !important; }
+
+/* Page nav */
+.pagenav, .boxpagenav, .countdisplay { color: #444 !important; }
+.pagenav a:hover { color: #E91E8C !important; }
+#layout-list .footer { background: #0A0A0F !important; border-top: 1px solid rgba(255,255,255,0.06) !important; }
+
+/* ═══ CONTENT PANE ═══ */
+#layout-content { background: #0C0C16 !important; }
 #layout-content .header { background: rgba(10,10,15,0.9) !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
-.messageheaderbox, #messageheader {
-    background: rgba(14,14,24,0.95) !important;
-    border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-}
-.messageheaderbox .header-title, .messageheaderbox td.header-title { color: #555 !important; font-size: 11px !important; text-transform: uppercase !important; }
-.messageheaderbox .header, .messageheaderbox td.header { color: #ccc !important; }
-#messagecontframe { background: #0E0E18 !important; }
-/* Email content in iframe */
-.message-htmlpart, .message-part { background: #0E0E18 !important; }
+#messagecontframe { background: #0C0C16 !important; }
+.messageheaderbox, #messageheader { background: rgba(12,12,20,0.9) !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
+.messageheaderbox .header-title { color: #555 !important; font-size: 11px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
+.messageheaderbox .header { color: #bbb !important; }
 
 /* ═══ COMPOSE ═══ */
-#composebody, .mce-content-body { background: #0E0E18 !important; color: #d0d0d0 !important; }
+#composebody, .mce-content-body { background: #0C0C16 !important; color: #d0d0d0 !important; }
 .tox .tox-toolbar, .tox .tox-toolbar__primary { background: rgba(10,10,15,0.95) !important; border-color: rgba(255,255,255,0.06) !important; }
-.tox .tox-tbtn { color: #888 !important; }
-.tox .tox-tbtn:hover { background: rgba(233,30,140,0.08) !important; color: #E91E8C !important; }
-.tox .tox-edit-area { background: #0E0E18 !important; }
-#compose-attachments { background: rgba(10,10,15,0.5) !important; border-color: rgba(255,255,255,0.06) !important; }
+.tox .tox-tbtn { color: #777 !important; }
+.tox .tox-tbtn:hover { background: rgba(233,30,140,0.06) !important; color: #E91E8C !important; }
+.tox .tox-edit-area { background: #0C0C16 !important; }
+.compose-header-table td { border-color: rgba(255,255,255,0.04) !important; }
 
-/* ═══ BUTTONS — gradient like panel ═══ */
-a.button.create, .btn-primary, button.btn-primary, input.mainaction,
-.formbuttons .mainaction, input[type="submit"].mainaction {
+/* ═══ BUTTONS ═══ */
+.btn-primary, button.btn-primary, input.mainaction, a.button.create {
     background: linear-gradient(135deg, #E91E8C, #9B26D9) !important;
     border: none !important;
     color: #fff !important;
     border-radius: 12px !important;
     font-weight: 600 !important;
-    padding: 10px 24px !important;
-    box-shadow: 0 0 15px rgba(233,30,140,0.12) !important;
-    transition: all 0.2s !important;
+    box-shadow: 0 0 15px rgba(233,30,140,0.1) !important;
     text-shadow: none !important;
+    transition: all 0.2s !important;
 }
-a.button.create:hover, .btn-primary:hover {
-    box-shadow: 0 4px 20px rgba(233,30,140,0.25) !important;
+.btn-primary:hover, a.button.create:hover {
+    box-shadow: 0 4px 20px rgba(233,30,140,0.2) !important;
     transform: translateY(-1px) !important;
 }
-.btn-secondary, .btn-default, button.btn-secondary, button.btn-default {
-    background: rgba(255,255,255,0.04) !important;
+.btn-secondary, .btn-default, button.btn-secondary {
+    background: rgba(255,255,255,0.03) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
-    color: #ccc !important;
+    color: #bbb !important;
     border-radius: 12px !important;
 }
-.btn-secondary:hover, .btn-default:hover { background: rgba(255,255,255,0.08) !important; }
-.btn-danger, button.btn-danger {
-    background: rgba(239,68,68,0.1) !important;
-    border: 1px solid rgba(239,68,68,0.2) !important;
-    color: #ef4444 !important;
-    border-radius: 12px !important;
-}
+.btn-secondary:hover { background: rgba(255,255,255,0.06) !important; }
+.btn-danger { background: rgba(239,68,68,0.08) !important; border: 1px solid rgba(239,68,68,0.2) !important; color: #ef4444 !important; border-radius: 12px !important; }
 
-/* ═══ INPUTS — glass style ═══ */
-input[type="text"], input[type="password"], input[type="email"],
-input[type="search"], input[type="url"], input[type="number"],
-textarea, select, .form-control, .custom-select {
+/* ═══ INPUTS ═══ */
+input[type="text"], input[type="password"], input[type="email"], input[type="search"],
+input[type="url"], input[type="number"], textarea, select, .form-control, .custom-select {
     background: rgba(255,255,255,0.03) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 12px !important;
     color: #e0e0e0 !important;
-    padding: 10px 14px !important;
     transition: all 0.2s !important;
 }
 input:focus, textarea:focus, select:focus, .form-control:focus {
     border-color: rgba(233,30,140,0.4) !important;
     box-shadow: 0 0 0 3px rgba(233,30,140,0.06) !important;
-    background: rgba(255,255,255,0.05) !important;
+    background: rgba(255,255,255,0.04) !important;
     outline: none !important;
 }
+.input-group-text { background: rgba(255,255,255,0.03) !important; border-color: rgba(255,255,255,0.1) !important; color: #888 !important; }
 
-/* Search bar */
-#quicksearchbar, .searchbar {
-    background: rgba(255,255,255,0.03) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 12px !important;
-    margin: 6px !important;
-}
-#quicksearchbar input, .searchbar input {
-    background: transparent !important;
-    border: none !important;
-    color: #ccc !important;
-}
-#quicksearchbar a, .searchbar a { color: #666 !important; }
-
-/* ═══ DIALOGS / POPUPS — glassmorphism ═══ */
+/* ═══ DIALOGS / POPUPS ═══ */
 .ui-dialog, .popupmenu, .dropdown-menu, .ui-autocomplete {
     background: rgba(14,14,24,0.95) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 16px !important;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.6) !important;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important;
     backdrop-filter: blur(20px) !important;
 }
 .ui-dialog .ui-dialog-titlebar { background: transparent !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
-.ui-dialog .ui-dialog-title { color: #f0f0f0 !important; font-weight: 700 !important; }
+.ui-dialog .ui-dialog-title { color: #f0f0f0 !important; }
 .ui-dialog .ui-dialog-content { color: #ccc !important; }
-.popupmenu ul li a, .dropdown-menu a {
-    color: #ccc !important;
+.popupmenu ul li a, .dropdown-menu a, .listing li a {
+    color: #bbb !important;
     border-radius: 8px !important;
-    margin: 1px 4px !important;
     transition: background 0.1s !important;
 }
 .popupmenu ul li a:hover, .dropdown-menu a:hover {
@@ -267,83 +290,44 @@ input:focus, textarea:focus, select:focus, .form-control:focus {
     color: #E91E8C !important;
 }
 
-/* ═══ SETTINGS / PREFERENCES ═══ */
-.formcontent, .propform, .preferences-table { background: transparent !important; color: #ccc !important; }
+/* ═══ SETTINGS ═══ */
+.formcontent, .propform { background: transparent !important; }
 fieldset { border-color: rgba(255,255,255,0.06) !important; }
 legend { color: #E91E8C !important; font-weight: 600 !important; font-size: 12px !important; text-transform: uppercase !important; letter-spacing: 1px !important; }
 .propform td, .propform th { border-color: rgba(255,255,255,0.04) !important; color: #bbb !important; }
-.listing.iconized li a::before { color: #666 !important; }
 
 /* ═══ CONTACTS ═══ */
-.contactlist tr td, .contactlist .name { color: #ccc !important; }
+.contactlist tr td { color: #ccc !important; }
 .contactlist tr.selected td { background: rgba(233,30,140,0.06) !important; }
-.contactphoto, .contactpic { border-radius: 50% !important; background: rgba(255,255,255,0.05) !important; }
-#contactframe { background: #0E0E18 !important; }
+.contactphoto { border-radius: 50% !important; background: rgba(255,255,255,0.04) !important; }
+#contactframe { background: #0C0C16 !important; }
 
-/* ═══ SCROLLBAR — thin pink ═══ */
-* { scrollbar-width: thin !important; scrollbar-color: rgba(233,30,140,0.15) transparent !important; }
-::-webkit-scrollbar { width: 5px !important; height: 5px !important; }
-::-webkit-scrollbar-track { background: transparent !important; }
-::-webkit-scrollbar-thumb { background: rgba(233,30,140,0.15) !important; border-radius: 3px !important; }
-::-webkit-scrollbar-thumb:hover { background: rgba(233,30,140,0.3) !important; }
-
-/* ═══ TYPOGRAPHY ═══ */
-h1, h2, h3, h4, h5, .boxtitle { color: #f0f0f0 !important; }
-label { color: #999 !important; }
-a { color: #E91E8C !important; }
-a:hover { color: #9B26D9 !important; }
-.hint, .form-text { color: #555 !important; }
-.countdisplay { color: #555 !important; font-size: 12px !important; }
-
-/* ═══ NAVIGATION ═══ */
-.pagenav a, .boxpagenav a { color: #666 !important; }
-.pagenav a:hover { color: #E91E8C !important; }
-hr { border-color: rgba(255,255,255,0.04) !important; }
-
-/* ═══ LISTS ═══ */
-.listing li, .listing tr { border-color: rgba(255,255,255,0.03) !important; }
-.listing li a, .listing li span { color: #bbb !important; }
-.listing li.selected > a { background: rgba(233,30,140,0.06) !important; color: #f0f0f0 !important; }
-.listing tr.selected td { background: rgba(233,30,140,0.06) !important; }
-
-/* ═══ NOTIFICATION BAR ═══ */
-#messagestack div, .ui-notification {
+/* ═══ NOTIFICATIONS ═══ */
+#messagestack div {
     background: rgba(14,14,24,0.95) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 14px !important;
     color: #ccc !important;
     box-shadow: 0 10px 30px rgba(0,0,0,0.4) !important;
+    backdrop-filter: blur(12px) !important;
 }
 #messagestack .notice { border-left: 3px solid #22c55e !important; }
 #messagestack .error { border-left: 3px solid #ef4444 !important; }
 #messagestack .warning { border-left: 3px solid #fbbf24 !important; }
 
-/* ═══ BOTTOM BAR ═══ */
-#layout-sidebar .footer, .layout-sidebar .footer {
-    background: #0A0A0F !important;
-    border-top: 1px solid rgba(255,255,255,0.06) !important;
-}
-#layout-sidebar .footer a, .footer a { color: #555 !important; }
-#layout-sidebar .footer a:hover { color: #E91E8C !important; }
+/* ═══ WATERMARK (empty state) ═══ */
+.watermark { opacity: 0.03 !important; }
 
-/* ═══ RESPONSIVE ═══ */
-@media (max-width: 768px) {
-    #taskmenu { border-right: none !important; border-top: 1px solid rgba(255,255,255,0.06) !important; background: rgba(10,10,15,0.98) !important; }
-    .header { backdrop-filter: blur(16px) !important; }
-}
+/* ═══ SCROLLBAR ═══ */
+* { scrollbar-width: thin !important; scrollbar-color: rgba(233,30,140,0.12) transparent !important; }
+::-webkit-scrollbar { width: 5px !important; height: 5px !important; }
+::-webkit-scrollbar-track { background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(233,30,140,0.12) !important; border-radius: 3px !important; }
+::-webkit-scrollbar-thumb:hover { background: rgba(233,30,140,0.25) !important; }
 
-/* ═══ CHECKBOX / TOGGLE ═══ */
-input[type="checkbox"]::before { border-color: rgba(255,255,255,0.2) !important; }
-input[type="checkbox"]:checked::before { background: #E91E8C !important; border-color: #E91E8C !important; }
-
-/* ═══ TAGS ═══ */
-.tag { border-radius: 8px !important; font-size: 10px !important; padding: 2px 8px !important; }
-
-/* ═══ BRANDING ═══ */
-.minmodetoggle::after {
-    content: "OVERPANEL" !important;
-    color: #E91E8C !important;
-    font-weight: 800 !important;
-    font-size: 9px !important;
-    letter-spacing: 2px !important;
-}
+/* ═══ MISC ═══ */
+.hint, .form-text { color: #444 !important; }
+.tag { border-radius: 8px !important; }
+.badge { background: rgba(233,30,140,0.1) !important; color: #E91E8C !important; border-radius: 8px !important; }
+#layout-sidebar .boxtitle, .boxtitle { color: #888 !important; background: transparent !important; border-color: rgba(255,255,255,0.06) !important; }
+.formcontainer { background: transparent !important; }
