@@ -36,6 +36,7 @@ import {
   HardDrive,
   AlertTriangle,
   Clock,
+  Mail,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -150,6 +151,16 @@ export default function SettingsPage() {
   const [cfToken, setCfToken] = useState({ cf_global_token: '' })
   const [savingCfToken, setSavingCfToken] = useState(false)
 
+  // ── Mail server state ───────────────────────────────────────────────────────
+  const [mailSettings, setMailSettings] = useState({
+    mail_enabled: 'false',
+    mail_stalwart_url: '',
+    mail_stalwart_token: '',
+    mail_roundcube_url: '',
+    mail_default_quota_mb: '500',
+  })
+  const [savingMail, setSavingMail] = useState(false)
+
   // ── S3 / Backblaze B2 state ──────────────────────────────────────────────────
   const [s3, setS3] = useState({
     s3_endpoint: '', s3_bucket: '', s3_access_key: '', s3_secret_key: '', s3_region: '',
@@ -220,6 +231,13 @@ export default function SettingsPage() {
     })
     setCfToken({
       cf_global_token: settingsData['cf_global_token'] ?? '',
+    })
+    setMailSettings({
+      mail_enabled: settingsData['mail_enabled'] ?? 'false',
+      mail_stalwart_url: settingsData['mail_stalwart_url'] ?? '',
+      mail_stalwart_token: '',
+      mail_roundcube_url: settingsData['mail_roundcube_url'] ?? '',
+      mail_default_quota_mb: settingsData['mail_default_quota_mb'] ?? '500',
     })
     setS3({
       s3_endpoint: settingsData['s3_endpoint'] ?? '',
@@ -361,6 +379,22 @@ export default function SettingsPage() {
     } finally {
       setSavingS3(false)
     }
+  }
+
+  const handleSaveMail = async () => {
+    setSavingMail(true)
+    try {
+      const payload: Record<string, string> = {
+        mail_enabled: mailSettings.mail_enabled,
+        mail_stalwart_url: mailSettings.mail_stalwart_url,
+        mail_roundcube_url: mailSettings.mail_roundcube_url,
+        mail_default_quota_mb: mailSettings.mail_default_quota_mb,
+      }
+      if (mailSettings.mail_stalwart_token) payload['mail_stalwart_token'] = mailSettings.mail_stalwart_token
+      await api.post('/api/settings', payload)
+      showToast('Konfiguracja serwera poczty zapisana')
+    } catch (err) { showToast(err instanceof ApiError ? err.message : 'Błąd zapisu', 'error') }
+    finally { setSavingMail(false) }
   }
 
   const handleSaveSftp = async () => {
@@ -828,6 +862,61 @@ export default function SettingsPage() {
               </div>
               <div className="mt-5 flex justify-end">
                 <Button onClick={handleSaveSchedule} loading={savingSchedule}><Save className="w-4 h-4" /> Zapisz</Button>
+              </div>
+            </Card>
+
+            {/* ── Mail Server (Stalwart) ─────────────────────────────────── */}
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                  <Mail className="w-4.5 h-4.5 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Serwer poczty (Stalwart Mail)</p>
+                  <p className="text-xs text-[var(--text-muted)]">Połączenie z serwerem poczty e-mail</p>
+                </div>
+                <div className="ml-auto">
+                  <button
+                    className={`w-10 h-5 rounded-full transition-colors ${mailSettings.mail_enabled === 'true' ? 'bg-green-500' : 'bg-white/10'}`}
+                    onClick={() => setMailSettings((s) => ({ ...s, mail_enabled: s.mail_enabled === 'true' ? 'false' : 'true' }))}
+                  >
+                    <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${mailSettings.mail_enabled === 'true' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <Input
+                  label="URL serwera Stalwart"
+                  placeholder="https://mail.example.com"
+                  value={mailSettings.mail_stalwart_url}
+                  onChange={(e) => setMailSettings((s) => ({ ...s, mail_stalwart_url: e.target.value }))}
+                  icon={<Server className="w-4 h-4" />}
+                />
+                <Input
+                  label="Hasło admina Stalwart"
+                  type="password"
+                  placeholder="••••••••"
+                  value={mailSettings.mail_stalwart_token}
+                  onChange={(e) => setMailSettings((s) => ({ ...s, mail_stalwart_token: e.target.value }))}
+                  icon={<Lock className="w-4 h-4" />}
+                />
+                <Input
+                  label="URL Webmaila (Roundcube)"
+                  placeholder="https://webmail.example.com"
+                  value={mailSettings.mail_roundcube_url}
+                  onChange={(e) => setMailSettings((s) => ({ ...s, mail_roundcube_url: e.target.value }))}
+                  icon={<Globe className="w-4 h-4" />}
+                />
+                <Input
+                  label="Domyślna quota (MB)"
+                  type="number"
+                  placeholder="500"
+                  value={mailSettings.mail_default_quota_mb}
+                  onChange={(e) => setMailSettings((s) => ({ ...s, mail_default_quota_mb: e.target.value }))}
+                />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={handleSaveMail} loading={savingMail}><Save className="w-4 h-4" /> Zapisz</Button>
               </div>
             </Card>
 
