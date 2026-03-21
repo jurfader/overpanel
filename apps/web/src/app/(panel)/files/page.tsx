@@ -28,7 +28,7 @@ import {
   Lock,
 } from 'lucide-react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 const TEXT_EXTENSIONS = new Set([
   '.php', '.html', '.htm', '.css', '.js', '.ts', '.json', '.txt', '.md',

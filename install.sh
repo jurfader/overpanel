@@ -618,8 +618,9 @@ log_ok ".env API zapisany"
 # --- Create .env.local for Web ---
 log_info "Tworzenie pliku .env.local dla Web..."
 mkdir -p "${INSTALL_DIR}/apps/web"
+# API_URL empty = relative paths → nginx proxies /api/ to Fastify on port 4000
 cat > "${INSTALL_DIR}/apps/web/.env.local" << EOF
-NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_API_URL=
 EOF
 log_ok ".env.local Web zapisany"
 

@@ -5,7 +5,7 @@ import { io, type Socket } from 'socket.io-client'
 import type { SystemStats } from '@overpanel/shared'
 import { useAuthStore } from '@/store/auth'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export function useSocketStats() {
   const [stats, setStats] = useState<SystemStats | null>(null)

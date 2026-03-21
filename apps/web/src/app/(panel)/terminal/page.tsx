@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/store/auth'
 import { TerminalIcon, RefreshCw, X, Maximize2, Minimize2 } from 'lucide-react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 const SOCKET_URL = API_URL
 
 export default function TerminalPage() {
