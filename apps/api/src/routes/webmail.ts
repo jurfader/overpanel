@@ -54,8 +54,8 @@ function requireSession(userId: string, mailbox: string) {
   return session
 }
 
-function formatAddress(addr: { name?: string; email: string }) {
-  return { name: addr.name || null, email: addr.email }
+function formatAddress(addr: any) {
+  return { name: addr.name || null, email: addr.email || '' }
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────────
