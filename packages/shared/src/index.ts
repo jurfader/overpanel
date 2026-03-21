@@ -1,6 +1,18 @@
 // Roles
 export type UserRole = 'admin' | 'client'
 
+// Permissions
+export const PANEL_SECTIONS = [
+  'dashboard', 'sites', 'databases', 'ssl', 'wordpress',
+  'dns', 'docker', 'files', 'ftp', 'cron', 'backups', 'logs',
+] as const
+export type PanelSection = typeof PANEL_SECTIONS[number]
+
+export interface UserPermissions {
+  sections: PanelSection[]
+  dockerContainerIds: string[]
+}
+
 // Auth
 export interface LoginRequest {
   email: string
@@ -13,6 +25,7 @@ export interface AuthUser {
   name: string
   role: UserRole
   siteCount?: number
+  permissions?: UserPermissions | null
 }
 
 export interface AuthResponse {

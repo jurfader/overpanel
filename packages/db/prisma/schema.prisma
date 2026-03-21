@@ -19,6 +19,7 @@ model User {
   name         String
   company      String?
   role         String   @default("client") // "admin" | "client"
+  permissions  String?  // JSON: { sections: string[], dockerContainerIds: string[] }
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

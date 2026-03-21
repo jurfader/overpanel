@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Topbar } from '@/components/layout/topbar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { useApi } from '@/hooks/use-api'
 import { api, ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
-import { Users, Plus, Trash2, Power, Mail, Lock, User, Building2, RefreshCw, Link2, Globe, Database as DbIcon, CheckCircle2 } from 'lucide-react'
+import { Users, Plus, Trash2, Power, Mail, Lock, User, Building2, RefreshCw, Link2, Globe, Database as DbIcon, CheckCircle2, Shield } from 'lucide-react'
 
 interface UserRecord {
   id: string
@@ -198,6 +198,136 @@ function ResourcesModal({
   )
 }
 
+// ── Permissions Modal ──────────────────────────────────────────────────────────
+
+const SECTION_LABELS: Record<string, string> = {
+  dashboard: 'Dashboard',
+  sites: 'Strony WWW',
+  databases: 'Bazy danych',
+  ssl: 'Certyfikaty SSL',
+  wordpress: 'WordPress',
+  dns: 'DNS / Cloudflare',
+  docker: 'Docker',
+  files: 'Menedżer plików',
+  ftp: 'FTP / SFTP',
+  cron: 'Cron Jobs',
+  backups: 'Backup',
+  logs: 'Logi',
+}
+const ALL_SECTIONS = Object.keys(SECTION_LABELS)
+
+interface DockerItem { id: string; name: string; image: string; status: string }
+
+function PermissionsModal({ user, onClose }: { user: UserRecord; onClose: () => void }) {
+  const [sections, setSections] = useState<string[]>([])
+  const [dockerIds, setDockerIds] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const { data: containers } = useApi<DockerItem[]>('/api/docker')
+
+  useEffect(() => {
+    api.get<{ sections: string[]; dockerContainerIds: string[] } | null>(`/api/users/${user.id}/permissions`)
+      .then((perms) => {
+        if (perms) {
+          setSections(perms.sections)
+          setDockerIds(perms.dockerContainerIds)
+        } else {
+          setSections([...ALL_SECTIONS])
+          setDockerIds([])
+        }
+        setLoaded(true)
+      })
+      .catch(() => {
+        setSections([...ALL_SECTIONS])
+        setLoaded(true)
+      })
+  }, [user.id])
+
+  const toggleSection = (s: string) => {
+    setSections((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
+  }
+
+  const toggleDocker = (id: string) => {
+    setDockerIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await api.put(`/api/users/${user.id}/permissions`, { sections, dockerContainerIds: dockerIds })
+      onClose()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Błąd zapisywania uprawnień')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!loaded) return null
+
+  return (
+    <Modal open onClose={onClose} title="Uprawnienia" description={`Konfiguruj dostęp dla: ${user.name}`} size="lg">
+      <div className="space-y-6">
+        {/* Panel sections */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Sekcje panelu</p>
+            <div className="flex gap-2">
+              <button className="text-xs text-[var(--primary)] hover:underline" onClick={() => setSections([...ALL_SECTIONS])}>
+                Wszystkie
+              </button>
+              <button className="text-xs text-[var(--text-muted)] hover:underline" onClick={() => setSections([])}>
+                Żadna
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {ALL_SECTIONS.map((s) => (
+              <label key={s} className="flex items-center gap-2.5 px-3 py-2 rounded-xl glass border border-white/[0.06] cursor-pointer hover:bg-white/[0.03]">
+                <input
+                  type="checkbox"
+                  checked={sections.includes(s)}
+                  onChange={() => toggleSection(s)}
+                  className="accent-[var(--primary)] w-4 h-4"
+                />
+                <span className="text-sm text-[var(--text-secondary)]">{SECTION_LABELS[s]}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Docker containers */}
+        {(containers ?? []).length > 0 && (
+          <div>
+            <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">Dostęp do kontenerów Docker</p>
+            <div className="space-y-2">
+              {(containers ?? []).map((c) => (
+                <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl glass border border-white/[0.06] cursor-pointer hover:bg-white/[0.03]">
+                  <input
+                    type="checkbox"
+                    checked={dockerIds.includes(c.id)}
+                    onChange={() => toggleDocker(c.id)}
+                    className="accent-[var(--primary)] w-4 h-4"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-[var(--text-secondary)]">{c.name}</span>
+                    <span className="text-xs text-[var(--text-muted)] ml-2">{c.image}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Anuluj</Button>
+          <Button className="flex-1" onClick={handleSave} loading={saving}>Zapisz uprawnienia</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export default function UsersPage() {
   const { data, loading, refetch } = useApi<UserRecord[]>('/api/users')
   const [showCreate, setShowCreate] = useState(false)
@@ -205,6 +335,7 @@ export default function UsersPage() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', company: '', role: 'client' })
   const [resourcesUser, setResourcesUser] = useState<UserRecord | null>(null)
+  const [permissionsUser, setPermissionsUser] = useState<UserRecord | null>(null)
 
   const users = data ?? []
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
@@ -342,6 +473,11 @@ export default function UsersPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-1">
+                {user.role === 'client' && (
+                  <Button variant="secondary" size="sm" onClick={() => setPermissionsUser(user)} title="Uprawnienia">
+                    <Shield className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button variant="secondary" size="sm" onClick={() => setResourcesUser(user)} title="Zarządzaj zasobami">
                   <Link2 className="w-4 h-4" />
                 </Button>
@@ -360,6 +496,11 @@ export default function UsersPage() {
       {/* Resources modal */}
       {resourcesUser && (
         <ResourcesModal user={resourcesUser} onClose={() => setResourcesUser(null)} />
+      )}
+
+      {/* Permissions modal */}
+      {permissionsUser && (
+        <PermissionsModal user={permissionsUser} onClose={() => { setPermissionsUser(null); refetch() }} />
       )}
 
       {/* Create user modal */}

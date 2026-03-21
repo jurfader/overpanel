@@ -85,6 +85,36 @@ export async function usersRoutes(fastify: FastifyInstance) {
     return reply.send({ success: true, data: null })
   })
 
+  // GET /api/users/:id/permissions — pobierz uprawnienia
+  fastify.get('/:id/permissions', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const user = await prisma.user.findUnique({ where: { id }, select: { permissions: true, role: true } })
+    if (!user) return reply.code(404).send({ success: false, error: 'User not found' })
+    const permissions = user.permissions ? JSON.parse(user.permissions) : null
+    return reply.send({ success: true, data: permissions })
+  })
+
+  // PUT /api/users/:id/permissions — ustaw uprawnienia
+  fastify.put('/:id/permissions', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const schema = z.object({
+      sections: z.array(z.string()),
+      dockerContainerIds: z.array(z.string()),
+    })
+    const body = schema.safeParse(request.body)
+    if (!body.success) return reply.code(400).send({ success: false, error: 'Invalid input' })
+
+    const user = await prisma.user.findUnique({ where: { id } })
+    if (!user) return reply.code(404).send({ success: false, error: 'User not found' })
+    if (user.role === 'admin') return reply.code(400).send({ success: false, error: 'Cannot set permissions for admin users' })
+
+    await prisma.user.update({
+      where: { id },
+      data: { permissions: JSON.stringify(body.data) },
+    })
+    return reply.send({ success: true, data: body.data })
+  })
+
   // POST /api/users/:id/assign-site — przypisz stronę do użytkownika (tylko admin)
   fastify.post('/:id/assign-site', { preHandler: [adminOnly] }, async (request, reply) => {
     const { id } = request.params as { id: string }

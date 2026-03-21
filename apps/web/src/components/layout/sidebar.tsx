@@ -27,30 +27,30 @@ import {
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
 
-type NavItem = { href: string; label: string; icon: React.ElementType; adminOnly?: boolean; needsSite?: boolean }
+type NavItem = { href: string; label: string; icon: React.ElementType; adminOnly?: boolean; needsSite?: boolean; section?: string }
 type NavGroup = { group: string; items: NavItem[]; adminOnly?: boolean }
 
 const navItems: NavGroup[] = [
   {
     group: 'Główne',
     items: [
-      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/sites', label: 'Strony WWW', icon: Globe },
-      { href: '/databases', label: 'Bazy danych', icon: Database },
-      { href: '/ssl', label: 'Certyfikaty SSL', icon: Shield },
-      { href: '/wordpress', label: 'WordPress', icon: Box },
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'dashboard' },
+      { href: '/sites', label: 'Strony WWW', icon: Globe, section: 'sites' },
+      { href: '/databases', label: 'Bazy danych', icon: Database, section: 'databases' },
+      { href: '/ssl', label: 'Certyfikaty SSL', icon: Shield, section: 'ssl' },
+      { href: '/wordpress', label: 'WordPress', icon: Box, section: 'wordpress' },
     ],
   },
   {
     group: 'Narzędzia',
     items: [
-      { href: '/dns', label: 'DNS / Cloudflare', icon: Cloud },
-      { href: '/docker', label: 'Docker', icon: Container, adminOnly: true },
-      { href: '/files', label: 'Menedżer plików', icon: FolderOpen, needsSite: true },
-      { href: '/ftp', label: 'FTP / SFTP', icon: UserCog, needsSite: true },
-      { href: '/cron', label: 'Cron Jobs', icon: Clock },
-      { href: '/backups', label: 'Backup', icon: HardDrive },
-      { href: '/logs', label: 'Logi', icon: Terminal },
+      { href: '/dns', label: 'DNS / Cloudflare', icon: Cloud, section: 'dns' },
+      { href: '/docker', label: 'Docker', icon: Container, section: 'docker' },
+      { href: '/files', label: 'Menedżer plików', icon: FolderOpen, needsSite: true, section: 'files' },
+      { href: '/ftp', label: 'FTP / SFTP', icon: UserCog, needsSite: true, section: 'ftp' },
+      { href: '/cron', label: 'Cron Jobs', icon: Clock, section: 'cron' },
+      { href: '/backups', label: 'Backup', icon: HardDrive, section: 'backups' },
+      { href: '/logs', label: 'Logi', icon: Terminal, section: 'logs' },
       { href: '/firewall', label: 'Firewall', icon: Network, adminOnly: true },
     ],
   },
@@ -138,8 +138,11 @@ export function Sidebar() {
                 {group.items
                   .filter((item) => {
                     if (item.adminOnly && user?.role !== 'admin') return false
-                    // Hide files/FTP for clients without sites
-                    if (item.needsSite && user?.role !== 'admin' && !((user as any)?.siteCount > 0)) return false
+                    if (item.needsSite && user?.role !== 'admin' && !(user?.siteCount && user.siteCount > 0)) return false
+                    // Section permissions for clients (null = full access)
+                    if (item.section && user?.role === 'client' && user.permissions) {
+                      if (!user.permissions.sections?.includes(item.section as any)) return false
+                    }
                     return true
                   })
                   .map(({ href, label, icon: Icon }) => {
