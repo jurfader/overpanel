@@ -151,7 +151,7 @@ POSTGRES_PASSWORD=${pgPassword}
 POSTGRES_DB=overcms
 
 # Redis
-REDIS_URL=redis://redis:6379
+REDIS_URL=redis://:${redisPassword}@redis:6379
 REDIS_PASSWORD=${redisPassword}
 
 # S3 / MinIO
