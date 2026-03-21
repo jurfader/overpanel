@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/empty-state'
 import { api, ApiError } from '@/lib/api'
+import { useAuthStore } from '@/store/auth'
 import {
   Box,
   Play,
@@ -25,6 +26,11 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  ChevronDown,
+  ChevronRight,
+  Cpu,
+  HardDrive,
+  Layers,
 } from 'lucide-react'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -775,10 +781,261 @@ services:
   )
 }
 
+// ─── Admin Overview Tab ─────────────────────────────────────────────────────────
+
+interface OverviewGroup {
+  group: string
+  type: 'overcms' | 'docker-compose' | 'standalone'
+  containers: Array<{
+    name: string
+    image: string
+    state: string
+    status: string
+    ports: string
+    cpu: string
+    memory: string
+  }>
+}
+
+function OverviewTab() {
+  const [groups, setGroups] = useState<OverviewGroup[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const fetchOverview = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.get<OverviewGroup[]>('/api/docker/admin-overview')
+      setGroups(data)
+      // Auto-expand all groups on first load
+      if (expanded.size === 0) {
+        setExpanded(new Set(data.map(g => g.group)))
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Nie udalo sie pobrac danych')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchOverview()
+  }, [fetchOverview])
+
+  const toggleGroup = (group: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(group)) {
+        next.delete(group)
+      } else {
+        next.add(group)
+      }
+      return next
+    })
+  }
+
+  function getTypeBadge(type: OverviewGroup['type']) {
+    switch (type) {
+      case 'overcms':
+        return <Badge variant="brand">OverCMS</Badge>
+      case 'docker-compose':
+        return <Badge variant="info">Docker Compose</Badge>
+      case 'standalone':
+        return <Badge variant="neutral">Standalone</Badge>
+    }
+  }
+
+  function getGroupRunningCount(group: OverviewGroup) {
+    return group.containers.filter(c => c.state === 'running').length
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-14">
+        <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
+        <span className="ml-2 text-sm text-[var(--text-muted)]">Ladowanie przegladu...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="p-6">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <XCircle className="w-8 h-8 text-red-400" />
+          <p className="text-sm font-medium text-red-400">Blad ladowania</p>
+          <p className="text-xs text-[var(--text-muted)]">{error}</p>
+          <Button variant="secondary" size="sm" onClick={fetchOverview} className="mt-2">
+            <RefreshCw className="w-4 h-4" /> Sprobuj ponownie
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  if (groups.length === 0) {
+    return (
+      <Card>
+        <EmptyState
+          icon={Layers}
+          title="Brak kontenerow"
+          description="Na serwerze nie znaleziono zadnych kontenerow Docker"
+        />
+      </Card>
+    )
+  }
+
+  const totalContainers = groups.reduce((sum, g) => sum + g.containers.length, 0)
+  const totalRunning = groups.reduce((sum, g) => sum + getGroupRunningCount(g), 0)
+
+  return (
+    <div className="space-y-4">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            {groups.length} grup &middot; {totalContainers} kontenerow &middot;{' '}
+            <span className="text-green-400">{totalRunning} aktywnych</span>
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={fetchOverview} disabled={loading}>
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Odswiez
+        </Button>
+      </div>
+
+      {/* Groups */}
+      {groups.map(group => {
+        const isExpanded = expanded.has(group.group)
+        const runningCount = getGroupRunningCount(group)
+        const allRunning = runningCount === group.containers.length
+        const noneRunning = runningCount === 0
+
+        return (
+          <Card key={group.group} className="overflow-hidden">
+            {/* Group header */}
+            <button
+              onClick={() => toggleGroup(group.group)}
+              className="w-full flex items-center gap-3 p-4 hover:bg-white/[0.02] transition-colors text-left"
+            >
+              {/* Expand icon */}
+              <div className="flex-shrink-0 text-[var(--text-muted)]">
+                {isExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </div>
+
+              {/* Status dot */}
+              <span
+                className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                  allRunning
+                    ? 'bg-green-400 shadow-[0_0_6px_rgba(34,197,94,0.8)]'
+                    : noneRunning
+                      ? 'bg-red-400/70'
+                      : 'bg-yellow-400 shadow-[0_0_6px_rgba(234,179,8,0.6)]'
+                }`}
+              />
+
+              {/* Group name */}
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-semibold text-[var(--text-primary)]">
+                  {group.group}
+                </span>
+              </div>
+
+              {/* Badges */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {getTypeBadge(group.type)}
+                <Badge variant={allRunning ? 'success' : noneRunning ? 'neutral' : 'warning'}>
+                  {runningCount}/{group.containers.length}
+                </Badge>
+              </div>
+            </button>
+
+            {/* Expanded container table */}
+            {isExpanded && (
+              <div className="border-t border-white/[0.06]">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[var(--text-muted)] uppercase tracking-widest border-b border-white/[0.04]">
+                        <th className="text-left px-4 py-2.5 font-semibold">Kontener</th>
+                        <th className="text-left px-4 py-2.5 font-semibold">Obraz</th>
+                        <th className="text-left px-4 py-2.5 font-semibold">Stan</th>
+                        <th className="text-left px-4 py-2.5 font-semibold">
+                          <div className="flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU</div>
+                        </th>
+                        <th className="text-left px-4 py-2.5 font-semibold">
+                          <div className="flex items-center gap-1"><HardDrive className="w-3 h-3" /> Pamiec</div>
+                        </th>
+                        <th className="text-left px-4 py-2.5 font-semibold">Porty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.containers.map(c => (
+                        <tr
+                          key={c.name}
+                          className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors"
+                        >
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                  c.state === 'running'
+                                    ? 'bg-green-400 shadow-[0_0_4px_rgba(34,197,94,0.7)]'
+                                    : 'bg-red-400/60'
+                                }`}
+                              />
+                              <span className="font-mono text-[var(--text-primary)] truncate max-w-[200px]">
+                                {c.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-[var(--text-muted)] truncate max-w-[180px]">
+                            {c.image}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium ${
+                                c.state === 'running'
+                                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                                  : c.state === 'exited'
+                                    ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                    : 'bg-white/5 text-[var(--text-muted)] border border-white/10'
+                              }`}
+                            >
+                              {c.state === 'running' ? 'Aktywny' : c.state === 'exited' ? 'Zatrzymany' : c.state}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{c.cpu}</td>
+                          <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{c.memory}</td>
+                          <td className="px-4 py-2.5 font-mono text-[var(--text-muted)] truncate max-w-[200px]">
+                            {c.ports || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function DockerPage() {
-  const [tab, setTab] = useState<'containers' | 'compose'>('containers')
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.role === 'admin'
+  const [tab, setTab] = useState<'containers' | 'compose' | 'overview'>('containers')
 
   const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -923,19 +1180,26 @@ export default function DockerPage() {
       <div className="p-6 space-y-5">
         {/* ── Tab switcher ── */}
         <div className="flex gap-1 p-1 glass rounded-xl border border-white/10 w-fit">
-          {(['containers', 'compose'] as const).map(t => (
+          {(
+            [
+              { key: 'containers' as const, label: 'Kontenery' },
+              { key: 'compose' as const, label: 'Docker Compose' },
+              ...(isAdmin ? [{ key: 'overview' as const, label: 'Przeglad' }] : []),
+            ] as Array<{ key: typeof tab; label: string }>
+          ).map(t => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={t.key}
+              onClick={() => setTab(t.key)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                tab === t.key ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              {t === 'containers' ? 'Kontenery' : 'Docker Compose'}
+              {t.label}
             </button>
           ))}
         </div>
 
+        {tab === 'overview' && isAdmin && <OverviewTab />}
         {tab === 'compose' && <ComposeTab />}
 
         {tab === 'containers' && <>

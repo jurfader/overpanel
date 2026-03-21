@@ -18,6 +18,7 @@ import {
 import { DOCKER_TEMPLATES, getTemplate, generateSecret } from '../services/docker-templates.js'
 import { createDockerProxyVhost, deleteNginxVhost, reloadNginx } from '../services/nginx.js'
 import { isTunnelActive, addDomainToTunnel } from '../services/cloudflared.js'
+import { run } from '../services/shell.js'
 
 const deploySchema = z.object({
   displayName: z.string().min(1).max(100),
@@ -80,6 +81,150 @@ export async function dockerRoutes(fastify: FastifyInstance) {
     })
 
     return reply.send({ success: true, data: enriched })
+  })
+
+  // GET /api/docker/admin-overview — all system containers grouped by project/domain
+  fastify.get('/admin-overview', { preHandler: [adminOnly] }, async (_req, reply) => {
+    try {
+      // 1. Get ALL containers from Docker
+      const { stdout: psOut } = await run("docker ps -a --format '{{json .}}'")
+      const psLines = psOut.split('\n').filter(l => l.trim().length > 0)
+
+      interface RawContainer {
+        name: string
+        image: string
+        state: string
+        status: string
+        ports: string
+        labels: Record<string, string>
+      }
+
+      const allContainers: RawContainer[] = psLines.map(line => {
+        const raw = JSON.parse(line) as Record<string, string>
+        const labels: Record<string, string> = {}
+        if (raw['Labels']) {
+          for (const pair of raw['Labels'].split(',')) {
+            const eqIdx = pair.indexOf('=')
+            if (eqIdx !== -1) {
+              labels[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1)
+            }
+          }
+        }
+        return {
+          name: (raw['Names'] ?? raw['Name'] ?? '').replace(/^\//, ''),
+          image: raw['Image'] ?? '',
+          state: raw['State'] ?? '',
+          status: raw['Status'] ?? '',
+          ports: raw['Ports'] ?? '',
+          labels,
+        }
+      })
+
+      // 2. Get resource stats (best-effort, don't block on failure)
+      const statsMap = new Map<string, { cpu: string; memory: string }>()
+      try {
+        const { stdout: statsOut } = await run("docker stats --no-stream --format '{{json .}}'")
+        const statsLines = statsOut.split('\n').filter(l => l.trim().length > 0)
+        for (const line of statsLines) {
+          const raw = JSON.parse(line) as Record<string, string>
+          const name = (raw['Name'] ?? '').replace(/^\//, '')
+          if (name) {
+            statsMap.set(name, {
+              cpu: raw['CPUPerc'] ?? '0%',
+              memory: raw['MemUsage'] ?? '0B / 0B',
+            })
+          }
+        }
+      } catch {
+        // Stats unavailable — proceed without them
+      }
+
+      // 3. Group containers by project / domain
+      interface ContainerGroup {
+        group: string
+        type: 'overcms' | 'docker-compose' | 'standalone'
+        containers: Array<{
+          name: string
+          image: string
+          state: string
+          status: string
+          ports: string
+          cpu: string
+          memory: string
+        }>
+      }
+
+      const groupsMap = new Map<string, ContainerGroup>()
+
+      function getOrCreateGroup(key: string, type: ContainerGroup['type']): ContainerGroup {
+        if (!groupsMap.has(key)) {
+          groupsMap.set(key, { group: key, type, containers: [] })
+        }
+        return groupsMap.get(key)!
+      }
+
+      for (const c of allContainers) {
+        const stats = statsMap.get(c.name)
+        const containerEntry = {
+          name: c.name,
+          image: c.image,
+          state: c.state,
+          status: c.status,
+          ports: c.ports,
+          cpu: stats?.cpu ?? '-',
+          memory: stats?.memory ?? '-',
+        }
+
+        const workingDir = c.labels['com.docker.compose.project.working_dir'] ?? ''
+        const composeProject = c.labels['com.docker.compose.project'] ?? ''
+
+        // OverCMS containers: check working_dir or name prefix
+        const overcmsMatch = workingDir.match(/\/opt\/overcms-sites\/([^/]+)/)
+        if (overcmsMatch) {
+          const domain = overcmsMatch[1]
+          const group = getOrCreateGroup(domain, 'overcms')
+          group.containers.push(containerEntry)
+          continue
+        }
+
+        if (c.name.startsWith('overcms-') || composeProject.startsWith('overcms-')) {
+          // Try extracting domain from compose project name: overcms-overmedia-pl → overmedia.pl
+          let domain = composeProject.replace(/^overcms-/, '').replace(/-/g, '.')
+          if (!domain || domain === composeProject) {
+            domain = c.name.replace(/^overcms-/, '').split('-')[0] || composeProject || c.name
+          }
+          const group = getOrCreateGroup(domain, 'overcms')
+          group.containers.push(containerEntry)
+          continue
+        }
+
+        // Docker Compose containers (non-OverCMS)
+        if (composeProject) {
+          // Try to extract domain from working_dir for compose projects
+          const dirMatch = workingDir.match(/\/([^/]+)\/?$/)
+          const groupName = dirMatch?.[1] || composeProject
+          const group = getOrCreateGroup(groupName, 'docker-compose')
+          group.containers.push(containerEntry)
+          continue
+        }
+
+        // Standalone containers → group "Inne"
+        const group = getOrCreateGroup('Inne', 'standalone')
+        group.containers.push(containerEntry)
+      }
+
+      // Sort: overcms first, then compose, then standalone
+      const typeOrder: Record<string, number> = { overcms: 0, 'docker-compose': 1, standalone: 2 }
+      const groups = Array.from(groupsMap.values()).sort((a, b) => {
+        const diff = (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)
+        return diff !== 0 ? diff : a.group.localeCompare(b.group)
+      })
+
+      return reply.send({ success: true, data: groups })
+    } catch (err) {
+      console.error('[Docker] admin-overview error:', err)
+      return reply.code(500).send({ success: false, error: 'Nie można pobrać przeglądu kontenerów' })
+    }
   })
 
   // GET /api/docker/:name/logs
