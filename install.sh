@@ -523,7 +523,7 @@ if [ -f "${ADMINER_DIR}/adminer.php" ]; then
     log_ok "Adminer już zainstalowany — pomijam"
 else
     log_info "Pobieranie Adminer..."
-    curl -sS -o "${ADMINER_DIR}/adminer.php" \
+    curl -sSL -o "${ADMINER_DIR}/adminer.php" \
       "https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php" 2>/dev/null
     log_ok "Adminer pobrany"
 fi
@@ -572,6 +572,15 @@ function adminer_object() {
     return new AutoLogin($data);
 }
 
+// Simulate form POST to auto-login (Adminer checks $_POST['auth'])
+$_POST['auth'] = [
+    'driver' => $data['driver'],
+    'server' => $data['server'],
+    'username' => $data['username'],
+    'password' => $data['password'],
+    'db' => $data['db'],
+    'permanent' => 1,
+];
 $_GET[$data['driver']] = $data['server'];
 $_GET['username'] = $data['username'];
 $_GET['db'] = $data['db'];
@@ -910,11 +919,11 @@ server {
 
     # Adminer — database management (PHP)
     location /adminer/ {
-        alias /opt/overpanel/adminer/;
+        root /opt/overpanel;
         index autologin.php;
         location ~ \.php$ {
             fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-            fastcgi_param SCRIPT_FILENAME /opt/overpanel/adminer/$fastcgi_script_name;
+            fastcgi_param SCRIPT_FILENAME $request_filename;
             include fastcgi_params;
         }
     }
