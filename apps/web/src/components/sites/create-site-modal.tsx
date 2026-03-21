@@ -194,15 +194,15 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await api.get<{ data: { status: string; step: string; log: string[] } | null }>(`/api/sites/install-status/${targetDomain}`)
-        if (res.data) {
-          setInstallLog(res.data.log)
-          setInstallStep(res.data.step)
-          if (res.data.status === 'success' || res.data.status === 'failed') {
-            setInstallStatus(res.data.status as 'success' | 'failed')
+        const res = await api.get<{ status: string; step: string; log: string[] } | null>(`/api/sites/install-status/${targetDomain}`)
+        if (res) {
+          setInstallLog(res.log)
+          setInstallStep(res.step)
+          if (res.status === 'success' || res.status === 'failed') {
+            setInstallStatus(res.status as 'success' | 'failed')
             if (pollRef.current) clearInterval(pollRef.current)
             pollRef.current = null
-            if (res.data.status === 'success') {
+            if (res.status === 'success') {
               onSuccess()
             }
           }
