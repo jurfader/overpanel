@@ -58,6 +58,15 @@ function formatAddress(addr: any) {
   return { name: addr.name || null, email: addr.email || '' }
 }
 
+// Extract body text from JMAP bodyParts + bodyValues
+function extractBodyValue(bodyParts: any[], bodyValues: Record<string, any>): string {
+  if (!bodyParts || !Array.isArray(bodyParts) || bodyParts.length === 0) return ''
+  if (!bodyValues) return ''
+  const partId = bodyParts[0]?.partId
+  if (!partId) return ''
+  return bodyValues[partId]?.value ?? ''
+}
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 export async function webmailRoutes(fastify: FastifyInstance) {
@@ -347,9 +356,8 @@ export async function webmailRoutes(fastify: FastifyInstance) {
           isFlagged: !!(email.keywords?.['$flagged']),
           hasAttachment: email.hasAttachment ?? false,
           size: email.size ?? 0,
-          htmlBody: email.htmlBody ?? [],
-          textBody: email.textBody ?? [],
-          bodyValues: email.bodyValues ?? {},
+          htmlBody: extractBodyValue(email.htmlBody, email.bodyValues),
+          textBody: extractBodyValue(email.textBody, email.bodyValues),
           attachments: (email.attachments ?? []).map((att: any) => ({
             ...att,
             downloadUrl: jmapDownloadUrl(session.accountId, att.blobId, att.name || 'attachment'),
