@@ -202,10 +202,12 @@ export async function systemRoutes(fastify: FastifyInstance) {
 
       const steps: Array<[string, string]> = [
         ['git pull', `git -C ${repoDir} pull origin main`],
-        ['pnpm install', `cd ${repoDir} && pnpm install --frozen-lockfile`],
-        ['pnpm build', `cd ${repoDir} && pnpm build`],
-        ['restart api', 'systemctl restart overpanel-api'],
-        ['restart web', 'systemctl restart overpanel-web'],
+        ['pnpm install', `cd ${repoDir} && pnpm install --no-frozen-lockfile`],
+        ['prisma generate', `cd ${repoDir}/packages/db && npx prisma generate`],
+        ['build packages', `cd ${repoDir} && pnpm --filter @overpanel/shared build && pnpm --filter @overpanel/db build`],
+        ['build api', `cd ${repoDir} && pnpm --filter @overpanel/api build`],
+        ['build web', `cd ${repoDir}/apps/web && pnpm build`],
+        ['copy static', `cd ${repoDir}/apps/web && if [ -d .next/standalone/apps/web ]; then cp -r public .next/standalone/apps/web/public 2>/dev/null; mkdir -p .next/standalone/apps/web/.next; cp -r .next/static .next/standalone/apps/web/.next/static 2>/dev/null; fi; true`],
       ]
 
       for (const [label, cmd] of steps) {
@@ -221,13 +223,21 @@ export async function systemRoutes(fastify: FastifyInstance) {
         }
       }
 
-      log.push('Update completed successfully')
+      // Write success BEFORE restarting — restart kills this process
+      log.push('Update completed successfully — restarting services...')
       await writeUpdateStatus({
         status: 'success',
         log,
         startedAt,
         completedAt: new Date().toISOString(),
       })
+
+      // Restart web first (doesn't kill us), then schedule API restart with delay
+      await execAsync('systemctl restart overpanel-web').catch(() => {})
+      // Give 1s for status file to be read by polling, then restart ourselves
+      setTimeout(() => {
+        execAsync('systemctl restart overpanel-api').catch(() => {})
+      }, 1500)
     })
 
     return reply.code(202).send({ success: true, data: { message: 'Aktualizacja uruchomiona' } })

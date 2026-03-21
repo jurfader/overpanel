@@ -71,15 +71,33 @@ export default function UpdatePage() {
   // Poll update status when running
   useEffect(() => {
     if (updateStatus.status !== 'running') return
+    let errorCount = 0
     const interval = setInterval(async () => {
       try {
         const data = await api.get<UpdateStatus>('/api/system/update-status')
+        errorCount = 0
         setUpdateStatus(data)
-        if (data.status === 'success' || data.status === 'failed') {
+        if (data.status === 'success') {
+          clearInterval(interval)
+          // Reload page after success to pick up new frontend build
+          setTimeout(() => window.location.reload(), 3000)
+        } else if (data.status === 'failed') {
           clearInterval(interval)
         }
       } catch {
-        // ignore transient polling errors
+        errorCount++
+        // After 10 consecutive errors (~20s), API likely restarted — check if update finished
+        if (errorCount >= 10) {
+          clearInterval(interval)
+          // Wait for API to come back up, then reload
+          const retry = setInterval(async () => {
+            try {
+              await api.get<UpdateStatus>('/api/system/update-status')
+              clearInterval(retry)
+              window.location.reload()
+            } catch {}
+          }, 3000)
+        }
       }
     }, 2000)
     return () => clearInterval(interval)
