@@ -570,18 +570,14 @@ cd "$INSTALL_DIR"
 log_info "Konfigurowanie uprawnień build scripts..."
 cat > "${INSTALL_DIR}/.npmrc" << 'NPMRC'
 enable-pre-post-scripts=true
+ignore-scripts=false
 NPMRC
 
-# Also write pnpm configuration to allow all builds
-cat > "${INSTALL_DIR}/.pnpmfile.cjs" << 'PNPMFILE'
-function readPackage(pkg) { return pkg }
-module.exports = { hooks: { readPackage } }
-PNPMFILE
-
 log_info "Instalowanie zależności pnpm..."
-pnpm install --no-frozen-lockfile --ignore-scripts=false 2>&1 | grep -v "^$" | tail -5
-# Rebuild native modules explicitly (pnpm v10 may block scripts initially)
-pnpm rebuild node-pty 2>/dev/null || true
+pnpm install --no-frozen-lockfile 2>&1 | grep -v "^$" | tail -5
+# Rebuild ALL native modules explicitly (pnpm v10 may block build scripts)
+log_info "Kompilowanie modułów natywnych..."
+pnpm rebuild 2>&1 | tail -3 || true
 log_ok "Zależności zainstalowane"
 
 # --- Generate Prisma client before any build ---
@@ -644,7 +640,11 @@ cd "$INSTALL_DIR"
 # --- Create admin user ---
 log_info "Tworzenie użytkownika administratora..."
 # Use bcryptjs (pure JS — no native compilation needed)
-ADMIN_HASH=$(NODE_PATH="${INSTALL_DIR}/node_modules" node -e "
+# Try from apps/api where bcryptjs is a direct dependency
+ADMIN_HASH=$(cd "${INSTALL_DIR}/apps/api" && node -e "
+const bcrypt = require('bcryptjs');
+bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
+" 2>/dev/null) || ADMIN_HASH=$(NODE_PATH="${INSTALL_DIR}/node_modules" node -e "
 const bcrypt = require('bcryptjs');
 bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
 " 2>/dev/null) || {
@@ -656,7 +656,7 @@ if [[ -n "${ADMIN_HASH:-}" ]]; then
     DATABASE_URL="file:${INSTALL_DIR}/packages/db/panel.db" \
     NODE_PATH="${INSTALL_DIR}/node_modules" \
     node -e "
-const { PrismaClient } = require('@overpanel/db');
+const { PrismaClient } = require('@prisma/client');
 const p = new PrismaClient();
 p.user.upsert({
   where:  { email: '${ADMIN_EMAIL}' },
@@ -688,10 +688,25 @@ log_info "Budowanie @overpanel/web (Next.js)..."
 cd "${INSTALL_DIR}/apps/web"
 pnpm build 2>&1 | tail -10 || log_warn "Web build nieudany"
 # Copy static assets into standalone output (required for standalone mode)
+# With outputFileTracingRoot set to monorepo root, standalone mirrors the monorepo structure:
+#   .next/standalone/apps/web/server.js  (entry point)
+#   .next/standalone/apps/web/.next/     (build output)
+STANDALONE_WEB=".next/standalone/apps/web"
 if [[ -d ".next/standalone" ]]; then
-    cp -r public .next/standalone/public 2>/dev/null || true
-    mkdir -p .next/standalone/.next
-    cp -r .next/static .next/standalone/.next/static 2>/dev/null || true
+    # Determine actual server.js location
+    if [[ -f "${STANDALONE_WEB}/server.js" ]]; then
+        log_info "Standalone: monorepo layout (apps/web/server.js)"
+        cp -r public "${STANDALONE_WEB}/public" 2>/dev/null || true
+        mkdir -p "${STANDALONE_WEB}/.next"
+        cp -r .next/static "${STANDALONE_WEB}/.next/static" 2>/dev/null || true
+    elif [[ -f ".next/standalone/server.js" ]]; then
+        log_info "Standalone: flat layout (server.js)"
+        cp -r public .next/standalone/public 2>/dev/null || true
+        mkdir -p .next/standalone/.next
+        cp -r .next/static .next/standalone/.next/static 2>/dev/null || true
+    else
+        log_warn "Nie znaleziono server.js w standalone — sprawdź build"
+    fi
 fi
 cd "${INSTALL_DIR}"
 log_ok "Aplikacje zbudowane"
@@ -815,10 +830,13 @@ if [[ -n "${CF_API_TOKEN}" ]] && command -v cloudflared &>/dev/null; then
         # Check if panel domain is already configured
         if grep -q "${PANEL_DOMAIN}" "$CF_CONFIG" 2>/dev/null; then
             log_warn "Domena ${PANEL_DOMAIN} już istnieje w konfiguracji tunelu"
+            echo -e "  ${YELLOW}Aktualny wpis:${NC}"
+            grep -A1 "hostname.*${PANEL_DOMAIN}" "$CF_CONFIG" 2>/dev/null | sed 's/^/    /'
+            echo -e "  ${CYAN}Nowy wpis: hostname: ${PANEL_DOMAIN} → http://localhost:3333${NC}"
 
             # Ask if user wants to update/fix the entry
             UPDATE_CF="n"
-            read -r -p "  Czy zaktualizować wpis dla ${PANEL_DOMAIN} (np. poprawić port → 3333)? [y/N]: " UPDATE_CF
+            read -r -p "  Czy zaktualizować wpis dla ${PANEL_DOMAIN}? [y/N]: " UPDATE_CF
             if [[ "${UPDATE_CF,,}" == "y" ]]; then
                 # Remove existing lines for this domain (hostname line + service line below it)
                 sed -i "/hostname: ${PANEL_DOMAIN}/,+1d" "$CF_CONFIG"
@@ -919,6 +937,17 @@ EOF
 
 # --- Web service ---
 log_info "Tworzenie overpanel-web.service..."
+
+# Detect server.js location (monorepo standalone layout vs flat)
+WEB_STANDALONE_DIR="${INSTALL_DIR}/apps/web/.next/standalone"
+if [[ -f "${WEB_STANDALONE_DIR}/apps/web/server.js" ]]; then
+    WEB_WORK_DIR="${WEB_STANDALONE_DIR}"
+    WEB_EXEC="apps/web/server.js"
+else
+    WEB_WORK_DIR="${INSTALL_DIR}/apps/web"
+    WEB_EXEC=".next/standalone/server.js"
+fi
+
 cat > /etc/systemd/system/overpanel-web.service << EOF
 [Unit]
 Description=OVERPANEL Web (Next.js 15)
@@ -928,8 +957,8 @@ After=network.target overpanel-api.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=${INSTALL_DIR}/apps/web
-ExecStart=${NODE_BIN} .next/standalone/server.js
+WorkingDirectory=${WEB_WORK_DIR}
+ExecStart=${NODE_BIN} ${WEB_EXEC}
 Restart=always
 RestartSec=5
 StandardOutput=journal
