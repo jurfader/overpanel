@@ -261,11 +261,12 @@ COMPEOF`)
     }
   })
 
-  // 7. Run database migration and seed (no silent catch — errors must be visible)
+  // 7. Run database migration from host (source schema .ts files not in prod container)
   await logStep('Migracja bazy danych', async () => {
-    await runLong(`${dc} exec -T api npx drizzle-kit push`)
+    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms npx drizzle-kit push --force`)
   })
 
+  // 8. Seed admin user inside the container (has compiled app + access to DB via service name)
   await logStep('Tworzenie konta admina', async () => {
     await runLong(`${dc} exec -T -e ADMIN_EMAIL=${adminEmail} -e ADMIN_PASSWORD=${adminPassword} api npx tsx packages/core/src/db/seed.ts`)
   })
