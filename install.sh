@@ -567,16 +567,28 @@ fi
 cd "$INSTALL_DIR"
 
 # --- Install dependencies ---
+log_info "Konfigurowanie uprawnień build scripts..."
+cat > "${INSTALL_DIR}/.npmrc" << 'NPMRC'
+enable-pre-post-scripts=true
+NPMRC
+
+# Also write pnpm configuration to allow all builds
+cat > "${INSTALL_DIR}/.pnpmfile.cjs" << 'PNPMFILE'
+function readPackage(pkg) { return pkg }
+module.exports = { hooks: { readPackage } }
+PNPMFILE
+
 log_info "Instalowanie zależności pnpm..."
-pnpm install --no-frozen-lockfile
+pnpm install --no-frozen-lockfile --ignore-scripts=false 2>&1 | grep -v "^$" | tail -5
 log_ok "Zależności zainstalowane"
 
 # --- Generate Prisma client before any build ---
 log_info "Generowanie klienta Prisma..."
 cd "${INSTALL_DIR}/packages/db"
-npx prisma generate --schema=prisma/schema.prisma 2>/dev/null || \
-    pnpm exec prisma generate 2>/dev/null || \
-    log_warn "Prisma generate nieudane — kontynuuję..."
+"${INSTALL_DIR}/node_modules/.bin/prisma" generate --schema=prisma/schema.prisma 2>/dev/null \
+    || "${INSTALL_DIR}/packages/db/node_modules/.bin/prisma" generate 2>/dev/null \
+    || npx --yes prisma@5 generate 2>/dev/null \
+    || log_warn "Prisma generate nieudane"
 cd "$INSTALL_DIR"
 
 # --- Build shared packages ---
@@ -616,8 +628,12 @@ log_ok ".env.local Web zapisany"
 # --- Push DB schema ---
 log_info "Generowanie klienta Prisma i aktualizowanie schematu..."
 cd "${INSTALL_DIR}/packages/db"
-npx prisma generate 2>/dev/null || true
-npx prisma db push --skip-generate 2>/dev/null || \
+"${INSTALL_DIR}/node_modules/.bin/prisma" generate --schema=prisma/schema.prisma 2>/dev/null \
+    || "${INSTALL_DIR}/packages/db/node_modules/.bin/prisma" generate 2>/dev/null \
+    || npx --yes prisma@5 generate 2>/dev/null \
+    || log_warn "Prisma generate nieudane"
+"${INSTALL_DIR}/node_modules/.bin/prisma" db push --skip-generate 2>/dev/null || \
+    "${INSTALL_DIR}/packages/db/node_modules/.bin/prisma" db push --skip-generate 2>/dev/null || \
     pnpm exec prisma db push --skip-generate 2>/dev/null || \
     log_warn "Prisma db push nie powiódł się — baza danych może wymagać ręcznej migracji"
 cd "$INSTALL_DIR"
@@ -664,13 +680,14 @@ fi
 
 # --- Build apps ---
 log_info "Budowanie @overpanel/api..."
-pnpm --filter @overpanel/api build 2>/dev/null || log_warn "@overpanel/api build pominięty (może używać ts-node w trybie dev)"
+pnpm --filter "@overpanel/api" build 2>&1 | tail -5 || \
+    (cd "${INSTALL_DIR}/apps/api" && pnpm build 2>&1 | tail -5) || \
+    log_warn "@overpanel/api build nieudany — serwer może nie działać poprawnie"
 
 log_info "Budowanie @overpanel/web (Next.js)..."
-pnpm --filter "./apps/web" build 2>/dev/null || \
-pnpm --filter "@overpanel/web" build 2>/dev/null || \
-(cd "${INSTALL_DIR}/apps/web" && pnpm build) || \
-log_warn "Web build nieudany"
+cd "${INSTALL_DIR}/apps/web"
+pnpm build 2>&1 | tail -10 || log_warn "Web build nieudany"
+cd "${INSTALL_DIR}"
 log_ok "Aplikacje zbudowane"
 
 cd "$INSTALL_DIR"

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcrypt'
 import { z } from 'zod'
 import { prisma } from '@overpanel/db'
+import { authMiddleware } from '../middleware/auth.js'
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -66,7 +67,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   // GET /api/auth/me
   fastify.get(
     '/me',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [authMiddleware] },
     async (request, reply) => {
       const payload = request.user as { id: string }
       const user = await prisma.user.findUnique({
@@ -81,7 +82,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   // POST /api/auth/change-password
   fastify.post(
     '/change-password',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [authMiddleware] },
     async (request, reply) => {
       const schema = z.object({ currentPassword: z.string(), newPassword: z.string().min(8) })
       const body = schema.safeParse(request.body)
