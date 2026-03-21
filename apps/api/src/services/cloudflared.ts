@@ -99,36 +99,33 @@ export async function addDomainToTunnel(domain: string): Promise<void> {
   const info = await getTunnelInfo()
   if (!info.configPath) throw new Error('Brak konfiguracji tunelu cloudflared')
 
-  // Backup oryginalnego configu
-  const originalContent = await readFile(info.configPath, 'utf-8')
+  const content = await readFile(info.configPath, 'utf-8')
+
+  // Już istnieje?
+  if (content.includes(`hostname: ${domain}`)) return
+
+  // Backup
+  await writeFile(info.configPath + '.bak', content, 'utf-8')
+
+  // Wstaw nową regułę przed catch-all (sed — niezawodne)
+  const entry = `  - hostname: ${domain}\\n    service: http://localhost:80`
 
   try {
-    const config = await readTunnelConfig(info.configPath)
-
-    // Sprawdź czy reguła już istnieje
-    const existing = config.ingress.findIndex(
-      (rule) => rule.hostname === domain || rule.hostname === `www.${domain}`
-    )
-    if (existing !== -1) return // już jest
-
-    // Znajdź catch-all (reguła bez hostname — musi być ostatnia)
-    const catchAllIndex = config.ingress.findIndex((rule) => !rule.hostname)
-
-    const newRule: IngressRule = { hostname: domain, service: 'http://localhost:80' }
-
-    if (catchAllIndex === -1) {
-      config.ingress.push(newRule, { service: 'http_status:404' })
+    if (content.includes('http_status:404') || content.includes('http_status: 404')) {
+      // Wstaw przed catch-all
+      await run(`sed -i 's|.*service: http_status.*|${entry}\\n  - service: http_status:404|' ${info.configPath}`)
+    } else if (content.includes('ingress:')) {
+      // Dopisz na końcu sekcji ingress
+      await run(`echo '${entry.replace(/\\n/g, '\n')}' >> ${info.configPath}`)
     } else {
-      config.ingress.splice(catchAllIndex, 0, newRule)
+      throw new Error('Brak sekcji ingress w config.yml')
     }
 
-    await writeTunnelConfig(info.configPath, config)
     await reloadTunnel()
   } catch (err) {
-    // Rollback — przywróć oryginalny config
+    // Rollback
     console.error('[cloudflared] addDomainToTunnel failed, rolling back:', err)
-    await writeFile(info.configPath, originalContent, 'utf-8')
-    // Restart z oryginalnym configiem
+    await writeFile(info.configPath, content, 'utf-8')
     await run('systemctl restart cloudflared').catch(() => {})
     throw err
   }
@@ -141,13 +138,20 @@ export async function removeDomainFromTunnel(domain: string): Promise<void> {
   const info = await getTunnelInfo()
   if (!info.configPath) return
 
-  const config = await readTunnelConfig(info.configPath)
-  config.ingress = config.ingress.filter(
-    (rule) => rule.hostname !== domain && rule.hostname !== `www.${domain}`
-  )
+  const content = await readFile(info.configPath, 'utf-8')
+  if (!content.includes(`hostname: ${domain}`)) return
 
-  await writeTunnelConfig(info.configPath, config)
-  await reloadTunnel()
+  await writeFile(info.configPath + '.bak', content, 'utf-8')
+
+  try {
+    // Usuń hostname line + następną linię (service)
+    await run(`sed -i '/hostname: ${domain}/,+1d' ${info.configPath}`)
+    await reloadTunnel()
+  } catch (err) {
+    console.error('[cloudflared] removeDomainFromTunnel failed, rolling back:', err)
+    await writeFile(info.configPath, content, 'utf-8')
+    await run('systemctl restart cloudflared').catch(() => {})
+  }
 }
 
 /**
@@ -157,10 +161,15 @@ export async function listTunnelDomains(): Promise<string[]> {
   const info = await getTunnelInfo()
   if (!info.configPath) return []
 
-  const config = await readTunnelConfig(info.configPath)
-  return config.ingress
-    .filter((rule) => rule.hostname && !rule.hostname.startsWith('www.'))
-    .map((rule) => rule.hostname!)
+  const content = await readFile(info.configPath, 'utf-8')
+  const domains: string[] = []
+  for (const line of content.split('\n')) {
+    const match = line.match(/hostname:\s*(.+)/)
+    if (match && match[1] && !match[1].startsWith('www.')) {
+      domains.push(match[1].trim())
+    }
+  }
+  return domains
 }
 
 // ── Reload ────────────────────────────────────────────────────────────────────
