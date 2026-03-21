@@ -296,8 +296,24 @@ else
         fi
     fi
 
-    # Ensure sites-available/sites-enabled exist (nginx.org package uses conf.d instead)
-    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d
+    # Ensure sites-available/sites-enabled/snippets exist
+    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/nginx/snippets
+
+    # Create fastcgi-php.conf snippet (required for PHP vhosts)
+    if [[ ! -f /etc/nginx/snippets/fastcgi-php.conf ]]; then
+        cat > /etc/nginx/snippets/fastcgi-php.conf << 'SNIPPET'
+location ~ \.php$ {
+    fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+    if (!-f $document_root$fastcgi_script_name) {
+        return 404;
+    }
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_param PATH_INFO $fastcgi_path_info;
+}
+SNIPPET
+        log_ok "Utworzono /etc/nginx/snippets/fastcgi-php.conf"
+    fi
 
     # If nginx.conf doesn't include sites-enabled, patch it
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
