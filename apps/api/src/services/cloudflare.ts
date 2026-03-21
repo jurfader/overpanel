@@ -88,7 +88,7 @@ export async function listDnsRecords(token: string, zoneId: string): Promise<CfD
 export async function createDnsRecord(
   token: string,
   zoneId: string,
-  record: Pick<CfDnsRecord, 'type' | 'name' | 'content' | 'ttl' | 'proxied'>
+  record: Pick<CfDnsRecord, 'type' | 'name' | 'content' | 'ttl' | 'proxied'> & { priority?: number }
 ): Promise<CfDnsRecord> {
   return cfFetch<CfDnsRecord>(token, `/zones/${zoneId}/dns_records`, {
     method: 'POST',
