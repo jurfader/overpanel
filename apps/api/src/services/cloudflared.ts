@@ -100,30 +100,36 @@ export async function addDomainToTunnel(domain: string): Promise<void> {
   if (!info.configPath) throw new Error('Brak konfiguracji tunelu cloudflared')
 
   const content = await readFile(info.configPath, 'utf-8')
-
-  // Już istnieje?
   if (content.includes(`hostname: ${domain}`)) return
 
   // Backup
   await writeFile(info.configPath + '.bak', content, 'utf-8')
 
-  // Wstaw nową regułę przed catch-all (sed — niezawodne)
-  const entry = `  - hostname: ${domain}\\n    service: http://localhost:80`
-
   try {
-    if (content.includes('http_status:404') || content.includes('http_status: 404')) {
+    // Manipulacja linia po linii — bezpieczniejsze niż sed
+    const lines = content.split('\n')
+    const newLines: string[] = []
+    let inserted = false
+
+    for (const line of lines) {
       // Wstaw przed catch-all
-      await run(`sed -i 's|.*service: http_status.*|${entry}\\n  - service: http_status:404|' ${info.configPath}`)
-    } else if (content.includes('ingress:')) {
-      // Dopisz na końcu sekcji ingress
-      await run(`echo '${entry.replace(/\\n/g, '\n')}' >> ${info.configPath}`)
-    } else {
-      throw new Error('Brak sekcji ingress w config.yml')
+      if (!inserted && /^\s*-\s*service:\s*http_status/.test(line)) {
+        newLines.push(`  - hostname: ${domain}`)
+        newLines.push(`    service: http://localhost:80`)
+        inserted = true
+      }
+      newLines.push(line)
     }
 
+    if (!inserted) {
+      // Brak catch-all — dopisz przed końcem
+      newLines.push(`  - hostname: ${domain}`)
+      newLines.push(`    service: http://localhost:80`)
+    }
+
+    await writeFile(info.configPath, newLines.join('\n'), 'utf-8')
     await reloadTunnel()
   } catch (err) {
-    // Rollback
     console.error('[cloudflared] addDomainToTunnel failed, rolling back:', err)
     await writeFile(info.configPath, content, 'utf-8')
     await run('systemctl restart cloudflared').catch(() => {})
@@ -144,8 +150,24 @@ export async function removeDomainFromTunnel(domain: string): Promise<void> {
   await writeFile(info.configPath + '.bak', content, 'utf-8')
 
   try {
-    // Usuń hostname line + następną linię (service)
-    await run(`sed -i '/hostname: ${domain}/,+1d' ${info.configPath}`)
+    // Filtruj linie — usuń hostname line + następną linię (service)
+    const lines = content.split('\n')
+    const newLines: string[] = []
+    let skipNext = false
+
+    for (const line of lines) {
+      if (skipNext) {
+        skipNext = false
+        continue
+      }
+      if (line.includes(`hostname: ${domain}`)) {
+        skipNext = true // pomiń też następną linię (service)
+        continue
+      }
+      newLines.push(line)
+    }
+
+    await writeFile(info.configPath, newLines.join('\n'), 'utf-8')
     await reloadTunnel()
   } catch (err) {
     console.error('[cloudflared] removeDomainFromTunnel failed, rolling back:', err)
