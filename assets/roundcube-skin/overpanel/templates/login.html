@@ -146,6 +146,29 @@ body {
     font-size: 13px !important;
 }
 
+/* Submit button */
+.login-btn {
+    width: 100% !important;
+    height: 54px !important;
+    background: linear-gradient(135deg, #E91E8C, #9B26D9) !important;
+    border: none !important;
+    border-radius: 16px !important;
+    color: white !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.5px !important;
+    cursor: pointer !important;
+    text-transform: uppercase !important;
+    margin-top: 24px !important;
+    box-shadow: 0 0 25px rgba(233,30,140,0.15) !important;
+    transition: all 0.2s !important;
+    display: block !important;
+}
+.login-btn:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 30px rgba(233,30,140,0.3) !important;
+}
+
 /* Footer */
 .login-footer {
     text-align: center;
@@ -172,12 +195,33 @@ body {
 
         <roundcube:object name="message" id="message" />
         <roundcube:object name="loginform" />
+        <button type="submit" class="login-btn" onclick="document.querySelector('form').submit()">Zaloguj się</button>
     </div>
 
     <div class="login-footer">
         Powered by OVERMEDIA
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add placeholder text
+    var userInput = document.getElementById('rcmloginuser');
+    var passInput = document.getElementById('rcmloginpwd');
+    if (userInput) userInput.placeholder = 'jan@example.com';
+    if (passInput) passInput.placeholder = '••••••••';
+
+    // Make button submit the form
+    var btn = document.querySelector('.login-btn');
+    var form = document.querySelector('form');
+    if (btn && form) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            form.submit();
+        });
+    }
+});
+</script>
 
 </body>
 </html>
