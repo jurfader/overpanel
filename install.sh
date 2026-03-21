@@ -435,37 +435,35 @@ log_ok "PostgreSQL: ${PG_VER}"
 log_info "Hasło zapisano w: ${PG_PASS_FILE}"
 
 # ==============================================================================
-# STEP 9: Install PHP 8.3
+# STEP 9: Install PHP (multiple versions)
 # ==============================================================================
-log_step "Instalacja PHP 8.3 + rozszerzenia"
+log_step "Instalacja PHP (7.4, 8.0, 8.1, 8.2, 8.3)"
 
-if php8.3 --version &>/dev/null 2>&1; then
-    log_warn "PHP 8.3 już zainstalowane — pomijam"
-else
+PHP_EXTENSIONS="fpm cli mysql pgsql curl mbstring xml zip gd intl bcmath soap readline opcache phar"
+
+if ! grep -q "ondrej/php" /etc/apt/sources.list.d/* 2>/dev/null; then
     log_info "Dodawanie repozytorium ondrej/php PPA..."
     add-apt-repository -y ppa:ondrej/php > /dev/null 2>&1
     apt-get update -qq
-
-    log_info "Instalowanie PHP 8.3 i rozszerzeń..."
-    apt-get install -y \
-        php8.3-fpm \
-        php8.3-cli \
-        php8.3-mysql \
-        php8.3-pgsql \
-        php8.3-curl \
-        php8.3-mbstring \
-        php8.3-xml \
-        php8.3-zip \
-        php8.3-gd \
-        php8.3-intl \
-        php8.3-bcmath > /dev/null 2>&1
-
-    systemctl enable php8.3-fpm > /dev/null 2>&1
-    systemctl start php8.3-fpm
 fi
 
+for PHP_V in 7.4 8.0 8.1 8.2 8.3; do
+    if php${PHP_V} --version &>/dev/null 2>&1; then
+        log_info "PHP ${PHP_V} już zainstalowane — pomijam"
+    else
+        log_info "Instalowanie PHP ${PHP_V}..."
+        PKGS=""
+        for EXT in $PHP_EXTENSIONS; do
+            PKGS="$PKGS php${PHP_V}-${EXT}"
+        done
+        apt-get install -y $PKGS > /dev/null 2>&1 || log_warn "PHP ${PHP_V} — niektóre rozszerzenia niedostępne"
+        systemctl enable php${PHP_V}-fpm > /dev/null 2>&1
+        systemctl start php${PHP_V}-fpm 2>/dev/null || true
+    fi
+done
+
 PHP_VER=$(php8.3 --version 2>/dev/null | head -1 | awk '{print $1" "$2}')
-log_ok "${PHP_VER}"
+log_ok "PHP zainstalowane: 7.4, 8.0, 8.1, 8.2, 8.3 (domyślna: ${PHP_VER})"
 
 # ==============================================================================
 # STEP 10: Install WP-CLI
