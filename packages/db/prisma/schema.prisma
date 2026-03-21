@@ -240,7 +240,7 @@ model MailDomain {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  siteId    String?
+  siteId    String?   @unique
   site      Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
