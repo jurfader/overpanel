@@ -200,6 +200,7 @@ export async function systemRoutes(fastify: FastifyInstance) {
       const steps: Array<[string, string]> = [
         ['git pull', `git -C ${repoDir} pull origin main`],
         ['pnpm install', `cd ${repoDir} && pnpm install --no-frozen-lockfile`],
+        ['rebuild native', `cd ${repoDir} && pnpm rebuild 2>&1 || true; PTY_DIR=$(find node_modules/.pnpm -path "*/node-pty/binding.gyp" -exec dirname {} \\; 2>/dev/null | head -1); [ -n "$PTY_DIR" ] && [ ! -f "$PTY_DIR/build/Release/pty.node" ] && (cd "$PTY_DIR" && npx node-gyp rebuild 2>&1) || true`],
         ['prisma generate', `cd ${repoDir}/packages/db && DATABASE_URL="file:${repoDir}/packages/db/panel.db" npx prisma generate`],
         ['prisma db push', `cd ${repoDir}/packages/db && DATABASE_URL="file:${repoDir}/packages/db/panel.db" npx prisma db push --skip-generate --accept-data-loss 2>&1 || true`],
         ['build packages', `cd ${repoDir} && pnpm --filter @overpanel/shared build && pnpm --filter @overpanel/db build`],

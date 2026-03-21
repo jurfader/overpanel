@@ -619,9 +619,20 @@ NPMRC
 
 log_info "Instalowanie zależności pnpm..."
 pnpm install --no-frozen-lockfile 2>&1 | grep -v "^$" | tail -5
-# Rebuild ALL native modules explicitly (pnpm v10 may block build scripts)
+# Rebuild native modules — pnpm v10 blocks build scripts by default
 log_info "Kompilowanie modułów natywnych..."
 pnpm rebuild 2>&1 | tail -3 || true
+# Fallback: compile node-pty directly if pnpm rebuild didn't do it
+NODE_PTY_DIR=$(find "${INSTALL_DIR}/node_modules/.pnpm" -path "*/node-pty/src/unix/pty.cc" -exec dirname {} \; 2>/dev/null | head -1)
+if [[ -n "$NODE_PTY_DIR" ]]; then
+    NODE_PTY_ROOT="$(cd "$NODE_PTY_DIR/../.." && pwd)"
+    if [[ ! -f "$NODE_PTY_ROOT/build/Release/pty.node" ]]; then
+        log_info "node-pty nie skompilowany — kompilowanie przez node-gyp..."
+        (cd "$NODE_PTY_ROOT" && npx node-gyp rebuild 2>&1 | tail -3) || log_warn "node-pty kompilacja nieudana — terminal może nie działać"
+    else
+        log_ok "node-pty: pty.node OK"
+    fi
+fi
 log_ok "Zależności zainstalowane"
 
 # --- Generate Prisma client before any build ---
