@@ -17,7 +17,10 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ success: false, error: 'Invalid input' })
     }
 
-    const user = await prisma.user.findUnique({ where: { email: body.data.email } })
+    const user = await prisma.user.findUnique({
+      where: { email: body.data.email },
+      include: { _count: { select: { sites: true } } },
+    })
     if (!user || !user.isActive) {
       return reply.code(401).send({ success: false, error: 'Invalid credentials' })
     }
@@ -52,7 +55,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     return reply.send({
       success: true,
       data: {
-        user: { id: user.id, email: user.email, name: user.name, role: user.role },
+        user: { id: user.id, email: user.email, name: user.name, role: user.role, siteCount: user._count.sites },
         accessToken,
       },
     })
@@ -72,10 +75,13 @@ export async function authRoutes(fastify: FastifyInstance) {
       const payload = request.user as { id: string }
       const user = await prisma.user.findUnique({
         where: { id: payload.id },
-        select: { id: true, email: true, name: true, role: true, company: true, createdAt: true },
+        select: {
+          id: true, email: true, name: true, role: true, company: true, createdAt: true,
+          _count: { select: { sites: true } },
+        },
       })
       if (!user) return reply.code(404).send({ success: false, error: 'User not found' })
-      return reply.send({ success: true, data: user })
+      return reply.send({ success: true, data: { ...user, siteCount: user._count.sites } })
     }
   )
 

@@ -27,7 +27,7 @@ import {
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
 
-type NavItem = { href: string; label: string; icon: React.ElementType; adminOnly?: boolean }
+type NavItem = { href: string; label: string; icon: React.ElementType; adminOnly?: boolean; needsSite?: boolean }
 type NavGroup = { group: string; items: NavItem[]; adminOnly?: boolean }
 
 const navItems: NavGroup[] = [
@@ -46,12 +46,12 @@ const navItems: NavGroup[] = [
     items: [
       { href: '/dns', label: 'DNS / Cloudflare', icon: Cloud },
       { href: '/docker', label: 'Docker', icon: Container, adminOnly: true },
-      { href: '/files', label: 'Menedżer plików', icon: FolderOpen },
-      { href: '/ftp', label: 'FTP / SFTP', icon: UserCog },
+      { href: '/files', label: 'Menedżer plików', icon: FolderOpen, needsSite: true },
+      { href: '/ftp', label: 'FTP / SFTP', icon: UserCog, needsSite: true },
       { href: '/cron', label: 'Cron Jobs', icon: Clock },
       { href: '/backups', label: 'Backup', icon: HardDrive },
       { href: '/logs', label: 'Logi', icon: Terminal },
-      { href: '/firewall', label: 'Firewall', icon: Network },
+      { href: '/firewall', label: 'Firewall', icon: Network, adminOnly: true },
     ],
   },
   {
@@ -136,7 +136,12 @@ export function Sidebar() {
               </p>
               <ul className="space-y-0.5">
                 {group.items
-                  .filter((item) => !item.adminOnly || user?.role === 'admin')
+                  .filter((item) => {
+                    if (item.adminOnly && user?.role !== 'admin') return false
+                    // Hide files/FTP for clients without sites
+                    if (item.needsSite && user?.role !== 'admin' && !((user as any)?.siteCount > 0)) return false
+                    return true
+                  })
                   .map(({ href, label, icon: Icon }) => {
                   const active = pathname.startsWith(href)
                   return (

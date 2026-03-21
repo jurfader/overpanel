@@ -12,6 +12,7 @@ export interface AuthUser {
   email: string
   name: string
   role: UserRole
+  siteCount?: number
 }
 
 export interface AuthResponse {
