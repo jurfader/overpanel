@@ -59,7 +59,7 @@ export function Topbar({ title, subtitle }: TopbarProps) {
     : 'A'
 
   return (
-    <header className="sticky top-0 z-30 h-16 glass border-b border-white/[0.06] flex items-center px-6 gap-4">
+    <header className="sticky top-0 z-30 h-16 bg-[#0A0A0F]/95 backdrop-blur-xl border-b border-white/[0.06] flex items-center px-6 gap-4">
       {/* Page title */}
       <div className="flex-1">
         <h1 className="text-base font-semibold text-[var(--text-primary)]">{title}</h1>
