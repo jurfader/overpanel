@@ -25,7 +25,7 @@ async function proxyToLicenseServer(
   body?: unknown
 ): Promise<{ status: number; data: unknown }> {
   const config = await getLicenseServerConfig()
-  if (!config) return { status: 404, data: { error: 'License management not available' } }
+  if (!config) return { status: 404, data: { success: false, error: 'License management not available' } }
 
   const res = await fetch(`${config.url}${path}`, {
     method,
@@ -36,8 +36,12 @@ async function proxyToLicenseServer(
     body: body ? JSON.stringify(body) : undefined,
   })
 
-  const data = await res.json().catch(() => ({}))
-  return { status: res.status, data }
+  const raw = await res.json().catch(() => ({}))
+  // Wrap in { success, data } format expected by frontend
+  if (res.ok) {
+    return { status: res.status, data: { success: true, data: raw.data ?? raw } }
+  }
+  return { status: res.status, data: { success: false, error: raw.error ?? 'License server error' } }
 }
 
 export async function licensesRoutes(fastify: FastifyInstance) {
