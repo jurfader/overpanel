@@ -34,8 +34,15 @@ export async function usersRoutes(fastify: FastifyInstance) {
     if (exists) return reply.code(409).send({ success: false, error: 'Email already exists' })
 
     const passwordHash = await bcrypt.hash(body.data.password, 12)
+    if (!body.data.email) return reply.code(400).send({ success: false, error: 'Email wymagany' })
     const user = await prisma.user.create({
-      data: { ...body.data, passwordHash },
+      data: {
+        email: body.data.email,
+        name: body.data.name,
+        company: body.data.company,
+        role: body.data.role,
+        passwordHash,
+      },
       select: { id: true, email: true, name: true, role: true, createdAt: true },
     })
 

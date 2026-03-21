@@ -627,6 +627,7 @@ log_ok ".env.local Web zapisany"
 
 # --- Push DB schema ---
 log_info "Generowanie klienta Prisma i aktualizowanie schematu..."
+export DATABASE_URL="file:${INSTALL_DIR}/packages/db/panel.db"
 cd "${INSTALL_DIR}/packages/db"
 "${INSTALL_DIR}/node_modules/.bin/prisma" generate --schema=prisma/schema.prisma 2>/dev/null \
     || "${INSTALL_DIR}/packages/db/node_modules/.bin/prisma" generate 2>/dev/null \

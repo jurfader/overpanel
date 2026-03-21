@@ -13,5 +13,6 @@
     "noImplicitAny": false,
     "strictNullChecks": false
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/seed.ts", "node_modules", "dist"]
 }
