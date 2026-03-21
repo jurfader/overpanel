@@ -145,27 +145,24 @@ export async function systemRoutes(fastify: FastifyInstance) {
       // Could not reach remote — treat as no updates
     }
 
+    // Build version string: semver from package.json + short commit hash
     let currentVersion = 'unknown'
     try {
-      const { stdout: tagOut } = await execAsync(
-        `git -C ${repoDir} describe --tags --always 2>/dev/null || true`
+      const pkgPath = `${repoDir}/package.json`
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'))
+        currentVersion = pkg.version ?? '0.0.0'
+      }
+    } catch {}
+
+    // Append short commit hash for traceability
+    try {
+      const { stdout: hashOut } = await execAsync(
+        `git -C ${repoDir} rev-parse --short HEAD 2>/dev/null`
       )
-      const tag = tagOut.trim()
-      if (tag) {
-        currentVersion = tag
-      }
-    } catch {
-      // fallback: try reading package.json
-      try {
-        const pkgPath = `${repoDir}/package.json`
-        if (existsSync(pkgPath)) {
-          const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'))
-          currentVersion = pkg.version ?? 'unknown'
-        }
-      } catch {
-        // give up
-      }
-    }
+      const hash = hashOut.trim()
+      if (hash) currentVersion += `+${hash}`
+    } catch {}
 
     return reply.send({ success: true, data: { hasUpdates, commits, currentVersion } })
   })
