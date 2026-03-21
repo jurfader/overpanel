@@ -863,7 +863,7 @@ if [[ -n "${CF_API_TOKEN}" ]] && command -v cloudflared &>/dev/null; then
             log_warn "Domena ${PANEL_DOMAIN} już istnieje w konfiguracji tunelu"
             echo -e "  ${YELLOW}Aktualny wpis:${NC}"
             grep -A1 "hostname.*${PANEL_DOMAIN}" "$CF_CONFIG" 2>/dev/null | sed 's/^/    /'
-            echo -e "  ${CYAN}Nowy wpis: hostname: ${PANEL_DOMAIN} → http://localhost:3333${NC}"
+            echo -e "  ${CYAN}Nowy wpis: hostname: ${PANEL_DOMAIN} → http://localhost:80${NC}"
 
             # Ask if user wants to update/fix the entry
             UPDATE_CF="n"
@@ -875,7 +875,7 @@ if [[ -n "${CF_API_TOKEN}" ]] && command -v cloudflared &>/dev/null; then
                 sed -i "/hostname:${PANEL_DOMAIN}/,+1d" "$CF_CONFIG"
 
                 # Now insert fresh entry
-                PANEL_INGRESS="  - hostname: ${PANEL_DOMAIN}\n    service: http://localhost:3333"
+                PANEL_INGRESS="  - hostname: ${PANEL_DOMAIN}\n    service: http://localhost:80"
                 if grep -q "http_status:404\|http_status: 404" "$CF_CONFIG"; then
                     sed -i "s|.*http_status:404.*|${PANEL_INGRESS}\n  - service: http_status:404|" "$CF_CONFIG"
                 elif grep -q "^ingress:" "$CF_CONFIG"; then
@@ -884,7 +884,7 @@ if [[ -n "${CF_API_TOKEN}" ]] && command -v cloudflared &>/dev/null; then
                     printf '\ningress:\n%s\n  - service: http_status:404\n' "$(echo -e "${PANEL_INGRESS}")" >> "$CF_CONFIG"
                 fi
 
-                log_ok "Zaktualizowano wpis ${PANEL_DOMAIN} → http://localhost:3333"
+                log_ok "Zaktualizowano wpis ${PANEL_DOMAIN} → http://localhost:80"
 
                 systemctl restart cloudflared 2>/dev/null \
                     || systemctl restart cloudflared.service 2>/dev/null \
@@ -900,7 +900,7 @@ if [[ -n "${CF_API_TOKEN}" ]] && command -v cloudflared &>/dev/null; then
             fi
         else
             # Build ingress entry for panel
-            PANEL_INGRESS="  - hostname: ${PANEL_DOMAIN}\n    service: http://localhost:3333"
+            PANEL_INGRESS="  - hostname: ${PANEL_DOMAIN}\n    service: http://localhost:80"
 
             # Insert before the catch-all line (last ingress rule)
             if grep -q "http_status:404\|http_status: 404" "$CF_CONFIG"; then
