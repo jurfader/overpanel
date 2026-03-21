@@ -6,14 +6,20 @@ export async function createSystemUser(domain: string) {
   const homeDir = `/var/www/${esc(domain)}`
 
   // Utwórz użytkownika jeśli nie istnieje
-  await run(
-    `id ${username} &>/dev/null || useradd -r -s /bin/false -d ${homeDir} ${username}`
-  )
-
-  // Ustaw uprawnienia
-  await run(`chown -R ${username}:www-data ${homeDir}`)
-  await run(`chmod -R 750 ${homeDir}`)
-  await run(`chmod -R 770 ${homeDir}/public`)
+  try {
+    await run(
+      `id ${username} &>/dev/null || useradd -r -s /bin/false -d ${homeDir} ${username}`
+    )
+    // Ustaw uprawnienia z użytkownikiem strony
+    await run(`chown -R ${username}:www-data ${homeDir}`)
+    await run(`chmod -R 750 ${homeDir}`)
+    await run(`chmod -R 770 ${homeDir}/public`)
+  } catch {
+    // Fallback: użyj www-data jeśli tworzenie usera nie zadziałało
+    console.warn(`[system-user] Cannot create user ${username}, using www-data fallback`)
+    await run(`chown -R www-data:www-data ${homeDir}`).catch(() => {})
+    await run(`chmod -R 755 ${homeDir}`).catch(() => {})
+  }
 }
 
 export async function deleteSystemUser(domain: string) {
