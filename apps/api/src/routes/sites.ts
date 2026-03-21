@@ -95,8 +95,12 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     // Operacje systemowe (async w tle, status update)
     setImmediate(async () => {
       try {
-        // 1. Użytkownik systemowy
-        await createSystemUser(domain)
+        // 1. Użytkownik systemowy (non-fatal — fallback do www-data)
+        try {
+          await createSystemUser(domain)
+        } catch (userErr) {
+          console.warn(`[Site] System user for ${domain} failed (non-fatal):`, userErr)
+        }
 
         // 2. Nginx vhost — type-aware
         if (siteType === 'nodejs' || siteType === 'python' || siteType === 'proxy') {

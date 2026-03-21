@@ -99,32 +99,39 @@ export async function addDomainToTunnel(domain: string): Promise<void> {
   const info = await getTunnelInfo()
   if (!info.configPath) throw new Error('Brak konfiguracji tunelu cloudflared')
 
-  const config = await readTunnelConfig(info.configPath)
+  // Backup oryginalnego configu
+  const originalContent = await readFile(info.configPath, 'utf-8')
 
-  // Sprawdź czy reguła już istnieje
-  const existing = config.ingress.findIndex(
-    (rule) => rule.hostname === domain || rule.hostname === `www.${domain}`
-  )
-  if (existing !== -1) return // już jest
+  try {
+    const config = await readTunnelConfig(info.configPath)
 
-  // Znajdź catch-all (reguła bez hostname — musi być ostatnia)
-  const catchAllIndex = config.ingress.findIndex((rule) => !rule.hostname)
+    // Sprawdź czy reguła już istnieje
+    const existing = config.ingress.findIndex(
+      (rule) => rule.hostname === domain || rule.hostname === `www.${domain}`
+    )
+    if (existing !== -1) return // już jest
 
-  const rules: IngressRule[] = [
-    { hostname: domain, service: 'http://localhost:80' },
-    { hostname: `www.${domain}`, service: 'http://localhost:80' },
-  ]
+    // Znajdź catch-all (reguła bez hostname — musi być ostatnia)
+    const catchAllIndex = config.ingress.findIndex((rule) => !rule.hostname)
 
-  if (catchAllIndex === -1) {
-    // Brak catch-all — dodaj na końcu + catch-all
-    config.ingress.push(...rules, { service: 'http_status:404' })
-  } else {
-    // Wstaw przed catch-all
-    config.ingress.splice(catchAllIndex, 0, ...rules)
+    const newRule: IngressRule = { hostname: domain, service: 'http://localhost:80' }
+
+    if (catchAllIndex === -1) {
+      config.ingress.push(newRule, { service: 'http_status:404' })
+    } else {
+      config.ingress.splice(catchAllIndex, 0, newRule)
+    }
+
+    await writeTunnelConfig(info.configPath, config)
+    await reloadTunnel()
+  } catch (err) {
+    // Rollback — przywróć oryginalny config
+    console.error('[cloudflared] addDomainToTunnel failed, rolling back:', err)
+    await writeFile(info.configPath, originalContent, 'utf-8')
+    // Restart z oryginalnym configiem
+    await run('systemctl restart cloudflared').catch(() => {})
+    throw err
   }
-
-  await writeTunnelConfig(info.configPath, config)
-  await reloadTunnel()
 }
 
 /**
@@ -159,16 +166,17 @@ export async function listTunnelDomains(): Promise<string[]> {
 // ── Reload ────────────────────────────────────────────────────────────────────
 
 export async function reloadTunnel(): Promise<void> {
+  // cloudflared nie obsługuje reload/HUP — musi być restart
+  // Czekamy chwilę żeby upewnić się że config jest zapisany
+  await new Promise((r) => setTimeout(r, 500))
   try {
-    await run('systemctl reload cloudflared')
-  } catch {
-    // Fallback — wyślij HUP do procesu
-    try {
-      await run('pkill -HUP cloudflared')
-    } catch {
-      // cloudflared nie obsługuje HUP — restart
-      await run('systemctl restart cloudflared')
-    }
+    await run('systemctl restart cloudflared')
+    // Poczekaj aż się uruchomi
+    await new Promise((r) => setTimeout(r, 2000))
+    await run('systemctl is-active cloudflared')
+  } catch (err) {
+    console.error('[cloudflared] Restart failed:', err)
+    throw new Error('Cloudflared restart failed — sprawdź config ręcznie')
   }
 }
 
