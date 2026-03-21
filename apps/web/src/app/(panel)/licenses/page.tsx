@@ -176,14 +176,14 @@ function CreateLicenseModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 }
 
 export default function LicensesPage() {
-  const { data: licensesData, loading, refetch } = useApi<{ data: License[] }>('/api/licenses')
-  const { data: statsData } = useApi<{ data: LicenseStats }>('/api/licenses/stats')
+  const { data: licensesData, loading, refetch } = useApi<License[]>('/api/licenses')
+  const { data: statsData } = useApi<LicenseStats>('/api/licenses/stats')
 
   const [showCreate, setShowCreate] = useState(false)
   const [showKey, setShowKey] = useState<string | null>(null)
 
-  const licenses = (licensesData as any)?.data ?? []
-  const stats = (statsData as any)?.data
+  const licenses = Array.isArray(licensesData) ? licensesData : []
+  const stats = statsData
 
   const handleRevoke = async (key: string) => {
     if (!confirm(`Unieważnić licencję ${key}?`)) return
