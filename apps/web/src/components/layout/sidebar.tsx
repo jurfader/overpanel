@@ -25,6 +25,7 @@ import {
   Container,
   RefreshCw,
   Key,
+  Disc3,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
@@ -62,6 +63,7 @@ const navItems: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: '/terminal', label: 'Terminal', icon: Terminal },
+      { href: '/disks', label: 'Dyski', icon: Disc3 },
       { href: '/users', label: 'Użytkownicy', icon: Users },
       { href: '/licenses', label: 'Licencje CMS', icon: Key },
       { href: '/settings', label: 'Ustawienia', icon: Settings },
