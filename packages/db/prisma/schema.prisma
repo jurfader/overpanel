@@ -1,0 +1,222 @@
+// OVERPANEL — Prisma Schema
+// Panel database (SQLite for development, PostgreSQL for production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  company      String?
+  role         String   @default("client") // "admin" | "client"
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sites            Site[]
+  databases        Database[]
+  cronJobs         CronJob[]
+  backups          Backup[]
+  ftpUsers         FtpUser[]
+  auditLogs        AuditLog[]
+  cfTokens         CloudflareToken[]
+  dockerContainers DockerContainer[]
+}
+
+// ─── Sites ────────────────────────────────────────────────────────────────────
+
+model Site {
+  id           String   @id @default(cuid())
+  domain       String   @unique
+  status       String   @default("active") // "active" | "inactive" | "pending"
+  phpVersion   String   @default("8.3")   // "7.4" | "8.0" | "8.1" | "8.2" | "8.3"
+  documentRoot String
+  nginxConfig  String?  // path to nginx config file
+  siteType     String   @default("php") // "php" | "nodejs" | "python" | "proxy" | "static"
+  appPort      Int?     // for nodejs/python/proxy sites
+  startCommand String?  // e.g. "node server.js" for nodejs
+  hasSSL       Boolean  @default(false)
+  sslExpiry    DateTime?
+  hasWordpress Boolean  @default(false)
+  wpVersion    String?
+  diskUsageMb  Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  databases    Database[]
+  cronJobs     CronJob[]
+  backups      Backup[]
+  ftpUsers     FtpUser[]
+  logs         SiteLog[]
+}
+
+// ─── Databases ────────────────────────────────────────────────────────────────
+
+model Database {
+  id        String   @id @default(cuid())
+  name      String
+  engine    String   // "mysql" | "postgresql"
+  dbUser    String
+  host      String   @default("localhost")
+  port      Int
+  sizeMb    Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+}
+
+// ─── SSL Certificates ─────────────────────────────────────────────────────────
+
+model SslCertificate {
+  id          String   @id @default(cuid())
+  domain      String   @unique
+  type        String   @default("letsencrypt") // "letsencrypt" | "custom"
+  certPath    String
+  keyPath     String
+  issuedAt    DateTime
+  expiresAt   DateTime
+  autoRenew   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Cron Jobs ────────────────────────────────────────────────────────────────
+
+model CronJob {
+  id          String   @id @default(cuid())
+  name        String
+  schedule    String   // cron expression
+  command     String
+  isActive    Boolean  @default(true)
+  lastRunAt   DateTime?
+  lastStatus  String?  // "success" | "failed"
+  lastOutput  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId      String?
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+}
+
+// ─── Backups ──────────────────────────────────────────────────────────────────
+
+model Backup {
+  id          String   @id @default(cuid())
+  type        String   // "files" | "database" | "full"
+  status      String   @default("pending") // "pending" | "running" | "success" | "failed"
+  sizeMb      Float    @default(0)
+  path        String?
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId      String?
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+}
+
+// ─── FTP Users ────────────────────────────────────────────────────────────────
+
+model FtpUser {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  homeDir     String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId      String?
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+}
+
+// ─── Cloudflare Tokens ────────────────────────────────────────────────────────
+
+model CloudflareToken {
+  id          String   @id @default(cuid())
+  label       String
+  token       String   // encrypted
+  accountId   String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String   // "site.create", "db.delete", "user.login" etc.
+  resource    String?
+  resourceId  String?
+  meta        String?  // JSON stringified extra data
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Site Logs ────────────────────────────────────────────────────────────────
+
+model SiteLog {
+  id        String   @id @default(cuid())
+  type      String   // "access" | "error" | "php"
+  message   String
+  createdAt DateTime @default(now())
+
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+// ─── Panel Settings ───────────────────────────────────────────────────────────
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Docker Containers ────────────────────────────────────────────────────────
+
+model DockerContainer {
+  id           String   @id @default(cuid())
+  name         String   @unique  // docker container name (slug)
+  displayName  String
+  image        String
+  domain       String?  @unique
+  internalPort Int?
+  externalPort Int?
+  status       String   @default("running") // "running" | "stopped" | "error"
+  template     String?  // template id
+  envVars      String?  // JSON string
+  volumes      String?  // JSON string of volume mounts
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

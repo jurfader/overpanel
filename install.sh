@@ -1,0 +1,750 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# OVERPANEL — One-command installer
+# Supports: Ubuntu 20.04 / 22.04 / 24.04 LTS
+# Usage:    sudo bash install.sh
+# ==============================================================================
+set -euo pipefail
+
+# ------------------------------------------------------------------------------
+# Colors & formatting
+# ------------------------------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'   # No Color
+
+TOTAL_STEPS=15
+CURRENT_STEP=0
+
+# ------------------------------------------------------------------------------
+# Helper functions
+# ------------------------------------------------------------------------------
+log_step() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo -e "\n${CYAN}${BOLD}[ ${CURRENT_STEP}/${TOTAL_STEPS} ] $1${NC}"
+}
+
+log_ok() {
+    echo -e "  ${GREEN}✓${NC} $1"
+}
+
+log_warn() {
+    echo -e "  ${YELLOW}⚠${NC}  $1"
+}
+
+log_error() {
+    echo -e "  ${RED}✗${NC} $1" >&2
+    exit 1
+}
+
+log_info() {
+    echo -e "  ${CYAN}→${NC} $1"
+}
+
+banner() {
+    echo -e "${CYAN}${BOLD}"
+    echo "  ╔═══════════════════════════════════════════════════╗"
+    echo "  ║                                                   ║"
+    echo "  ║    ██████╗ ██╗   ██╗███████╗██████╗              ║"
+    echo "  ║   ██╔═══██╗██║   ██║██╔════╝██╔══██╗             ║"
+    echo "  ║   ██║   ██║██║   ██║█████╗  ██████╔╝             ║"
+    echo "  ║   ██║   ██║╚██╗ ██╔╝██╔══╝  ██╔══██╗             ║"
+    echo "  ║   ╚██████╔╝ ╚████╔╝ ███████╗██║  ██║             ║"
+    echo "  ║    ╚═════╝   ╚═══╝  ╚══════╝╚═╝  ╚═╝             ║"
+    echo "  ║                                                   ║"
+    echo "  ║         P A N E L   I N S T A L L E R            ║"
+    echo "  ║                                                   ║"
+    echo "  ╚═══════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# ------------------------------------------------------------------------------
+# Root check
+# ------------------------------------------------------------------------------
+[[ $EUID -ne 0 ]] && log_error "Run as root: sudo bash install.sh"
+
+# Print banner
+banner
+
+echo -e "${BOLD}Witaj w instalatorze OVERPANEL!${NC}"
+echo "Ten skrypt zainstaluje pełny stos VPS hosting control panel."
+echo ""
+
+# ==============================================================================
+# STEP 1: System detection
+# ==============================================================================
+log_step "Wykrywanie systemu"
+
+if [[ -f /etc/os-release ]]; then
+    source /etc/os-release
+    OS_NAME="${NAME:-Unknown}"
+    OS_VERSION="${VERSION_ID:-0}"
+    log_ok "System: ${OS_NAME} ${OS_VERSION}"
+else
+    log_warn "Nie można odczytać /etc/os-release"
+    OS_NAME="Unknown"
+    OS_VERSION="0"
+fi
+
+# Warn if not a supported Ubuntu version
+if [[ "$OS_NAME" != *"Ubuntu"* ]]; then
+    log_warn "Ten skrypt jest zoptymalizowany dla Ubuntu. Wykryto: ${OS_NAME}"
+    log_warn "Kontynuowanie może się nie powieść."
+else
+    case "$OS_VERSION" in
+        20.04|22.04|24.04)
+            log_ok "Obsługiwana wersja Ubuntu: ${OS_VERSION}"
+            ;;
+        *)
+            log_warn "Ubuntu ${OS_VERSION} nie jest oficjalnie obsługiwane (20.04/22.04/24.04)"
+            log_warn "Skrypt spróbuje kontynuować, ale mogą wystąpić problemy."
+            ;;
+    esac
+fi
+
+log_info "Aktualizowanie listy pakietów..."
+apt-get update -qq
+log_ok "Lista pakietów zaktualizowana"
+
+# ==============================================================================
+# STEP 2: Interactive questions
+# ==============================================================================
+log_step "Konfiguracja instalacji"
+
+echo ""
+echo -e "${BOLD}Odpowiedz na kilka pytań, aby skonfigurować OVERPANEL:${NC}"
+echo ""
+
+# --- PANEL_DOMAIN ---
+while true; do
+    read -r -p "  Domena panelu (np. panel.example.com): " PANEL_DOMAIN
+    # Validate: not empty + basic domain format (contains a dot, no spaces, no slashes)
+    if [[ -z "$PANEL_DOMAIN" ]]; then
+        echo -e "  ${RED}Domena nie może być pusta.${NC}"
+    elif [[ ! "$PANEL_DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)+$ ]]; then
+        echo -e "  ${RED}Nieprawidłowy format domeny. Przykład: panel.example.com${NC}"
+    else
+        break
+    fi
+done
+
+# --- ADMIN_EMAIL ---
+while true; do
+    read -r -p "  E-mail administratora (SSL + konto admina): " ADMIN_EMAIL
+    if [[ "$ADMIN_EMAIL" != *"@"* ]] || [[ -z "$ADMIN_EMAIL" ]]; then
+        echo -e "  ${RED}Nieprawidłowy adres e-mail (musi zawierać @).${NC}"
+    else
+        break
+    fi
+done
+
+# --- ADMIN_PASSWORD ---
+while true; do
+    read -r -s -p "  Hasło administratora (min. 8 znaków): " ADMIN_PASSWORD
+    echo ""
+    if [[ ${#ADMIN_PASSWORD} -lt 8 ]]; then
+        echo -e "  ${RED}Hasło musi mieć minimum 8 znaków.${NC}"
+        continue
+    fi
+    read -r -s -p "  Powtórz hasło: " ADMIN_PASSWORD_CONFIRM
+    echo ""
+    if [[ "$ADMIN_PASSWORD" != "$ADMIN_PASSWORD_CONFIRM" ]]; then
+        echo -e "  ${RED}Hasła nie są identyczne. Spróbuj ponownie.${NC}"
+    else
+        break
+    fi
+done
+
+# --- CF_API_TOKEN (optional) ---
+read -r -s -p "  Cloudflare API Token (opcjonalnie, Enter aby pominąć): " CF_API_TOKEN
+echo ""
+if [[ -z "$CF_API_TOKEN" ]]; then
+    log_warn "Cloudflare API Token pominięty"
+fi
+
+# --- Summary ---
+echo ""
+echo -e "${BOLD}Podsumowanie konfiguracji:${NC}"
+echo -e "  Domena:          ${CYAN}${PANEL_DOMAIN}${NC}"
+echo -e "  E-mail:          ${CYAN}${ADMIN_EMAIL}${NC}"
+echo -e "  Hasło:           ${CYAN}[ukryte]${NC}"
+echo -e "  CF API Token:    ${CYAN}${CF_API_TOKEN:+[ustawiony]}${CF_API_TOKEN:-[pominięty]}${NC}"
+echo ""
+
+read -r -p "  Kontynuować instalację? [Y/n]: " CONFIRM
+CONFIRM="${CONFIRM:-Y}"
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo -e "\n${YELLOW}Instalacja anulowana przez użytkownika.${NC}"
+    exit 0
+fi
+
+# ==============================================================================
+# STEP 3: Install system dependencies
+# ==============================================================================
+log_step "Instalacja zależności systemowych"
+
+log_info "Instalowanie niezbędnych pakietów..."
+apt-get install -y -qq \
+    curl \
+    wget \
+    git \
+    unzip \
+    software-properties-common \
+    apt-transport-https \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    openssl
+
+log_ok "Zależności systemowe zainstalowane"
+
+# ==============================================================================
+# STEP 4: Install Node.js 20
+# ==============================================================================
+log_step "Instalacja Node.js 20"
+
+if command -v node &>/dev/null; then
+    NODE_CURRENT=$(node --version 2>/dev/null || echo "unknown")
+    log_warn "Node.js już zainstalowany: ${NODE_CURRENT}"
+    if [[ "$NODE_CURRENT" == v20* ]]; then
+        log_ok "Node.js 20 jest już zainstalowany — pomijam"
+    else
+        log_info "Instalowanie Node.js 20 (nadpisuje ${NODE_CURRENT})..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null 2>&1
+        apt-get install -y nodejs > /dev/null 2>&1
+    fi
+else
+    log_info "Pobieranie i instalowanie Node.js 20..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null 2>&1
+    apt-get install -y nodejs > /dev/null 2>&1
+fi
+
+NODE_VER=$(node --version)
+NPM_VER=$(npm --version)
+log_ok "Node.js: ${NODE_VER}"
+log_ok "npm:     v${NPM_VER}"
+
+# ==============================================================================
+# STEP 5: Install pnpm
+# ==============================================================================
+log_step "Instalacja pnpm"
+
+log_info "Instalowanie pnpm (globalnie przez npm)..."
+npm install -g pnpm@latest > /dev/null 2>&1
+
+PNPM_VER=$(pnpm --version)
+log_ok "pnpm: v${PNPM_VER}"
+
+# ==============================================================================
+# STEP 6: Install Nginx
+# ==============================================================================
+log_step "Instalacja Nginx"
+
+if systemctl is-active --quiet nginx 2>/dev/null; then
+    log_warn "Nginx już działa — pomijam instalację"
+else
+    log_info "Instalowanie Nginx..."
+    apt-get install -y nginx > /dev/null 2>&1
+    systemctl enable nginx > /dev/null 2>&1
+    systemctl start nginx
+fi
+
+NGINX_VER=$(nginx -v 2>&1 | awk -F'/' '{print $2}')
+log_ok "Nginx: ${NGINX_VER}"
+
+# ==============================================================================
+# STEP 7: Install MySQL 8
+# ==============================================================================
+log_step "Instalacja MySQL 8"
+
+# Store password to a file for idempotency
+MYSQL_PASS_FILE="/root/.overpanel_mysql_pass"
+
+if systemctl is-active --quiet mysql 2>/dev/null; then
+    log_warn "MySQL już działa"
+    if [[ -f "$MYSQL_PASS_FILE" ]]; then
+        MYSQL_ROOT_PASS=$(cat "$MYSQL_PASS_FILE")
+        log_ok "Hasło MySQL odczytane z ${MYSQL_PASS_FILE}"
+    else
+        MYSQL_ROOT_PASS=$(openssl rand -base64 16 | tr -d '=/+')
+        echo "$MYSQL_ROOT_PASS" > "$MYSQL_PASS_FILE"
+        chmod 600 "$MYSQL_PASS_FILE"
+        log_warn "Ustawianie nowego hasła root MySQL..."
+        mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MYSQL_ROOT_PASS}';" 2>/dev/null || true
+        mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
+    fi
+else
+    log_info "Instalowanie MySQL Server..."
+    apt-get install -y mysql-server > /dev/null 2>&1
+    systemctl enable mysql > /dev/null 2>&1
+    systemctl start mysql
+
+    MYSQL_ROOT_PASS=$(openssl rand -base64 16 | tr -d '=/+')
+    echo "$MYSQL_ROOT_PASS" > "$MYSQL_PASS_FILE"
+    chmod 600 "$MYSQL_PASS_FILE"
+
+    log_info "Konfigurowanie hasła root MySQL..."
+    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MYSQL_ROOT_PASS}';" 2>/dev/null \
+        || mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MYSQL_ROOT_PASS}';"
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "FLUSH PRIVILEGES;"
+fi
+
+log_ok "MySQL działa. Hasło root: ${MYSQL_ROOT_PASS}"
+log_info "Hasło zapisano w: ${MYSQL_PASS_FILE}"
+
+# ==============================================================================
+# STEP 8: Install PostgreSQL 16
+# ==============================================================================
+log_step "Instalacja PostgreSQL"
+
+# Store PG password for idempotency
+PG_PASS_FILE="/root/.overpanel_pg_pass"
+
+if systemctl is-active --quiet postgresql 2>/dev/null; then
+    log_warn "PostgreSQL już działa"
+    if [[ -f "$PG_PASS_FILE" ]]; then
+        PG_PASS=$(cat "$PG_PASS_FILE")
+        log_ok "Hasło PostgreSQL odczytane z ${PG_PASS_FILE}"
+    else
+        PG_PASS=$(openssl rand -base64 16 | tr -d '=/+')
+        echo "$PG_PASS" > "$PG_PASS_FILE"
+        chmod 600 "$PG_PASS_FILE"
+    fi
+else
+    log_info "Instalowanie PostgreSQL..."
+    apt-get install -y postgresql postgresql-contrib > /dev/null 2>&1
+    systemctl enable postgresql > /dev/null 2>&1
+    systemctl start postgresql
+
+    PG_PASS=$(openssl rand -base64 16 | tr -d '=/+')
+    echo "$PG_PASS" > "$PG_PASS_FILE"
+    chmod 600 "$PG_PASS_FILE"
+fi
+
+# Create overpanel user (idempotent)
+log_info "Konfigurowanie użytkownika PostgreSQL 'overpanel'..."
+sudo -u postgres psql -c "CREATE USER overpanel WITH PASSWORD '${PG_PASS}';" 2>/dev/null || true
+sudo -u postgres psql -c "ALTER USER overpanel WITH PASSWORD '${PG_PASS}';" 2>/dev/null
+
+PG_VER=$(sudo -u postgres psql -c "SELECT version();" -t 2>/dev/null | head -1 | awk '{print $1" "$2}' || echo "unknown")
+log_ok "PostgreSQL: ${PG_VER}"
+log_info "Hasło zapisano w: ${PG_PASS_FILE}"
+
+# ==============================================================================
+# STEP 9: Install PHP 8.3
+# ==============================================================================
+log_step "Instalacja PHP 8.3 + rozszerzenia"
+
+if php8.3 --version &>/dev/null 2>&1; then
+    log_warn "PHP 8.3 już zainstalowane — pomijam"
+else
+    log_info "Dodawanie repozytorium ondrej/php PPA..."
+    add-apt-repository -y ppa:ondrej/php > /dev/null 2>&1
+    apt-get update -qq
+
+    log_info "Instalowanie PHP 8.3 i rozszerzeń..."
+    apt-get install -y \
+        php8.3-fpm \
+        php8.3-cli \
+        php8.3-mysql \
+        php8.3-pgsql \
+        php8.3-curl \
+        php8.3-mbstring \
+        php8.3-xml \
+        php8.3-zip \
+        php8.3-gd \
+        php8.3-intl \
+        php8.3-bcmath > /dev/null 2>&1
+
+    systemctl enable php8.3-fpm > /dev/null 2>&1
+    systemctl start php8.3-fpm
+fi
+
+PHP_VER=$(php8.3 --version 2>/dev/null | head -1 | awk '{print $1" "$2}')
+log_ok "${PHP_VER}"
+
+# ==============================================================================
+# STEP 10: Install WP-CLI
+# ==============================================================================
+log_step "Instalacja WP-CLI"
+
+if command -v wp &>/dev/null; then
+    WP_VER=$(wp --version --allow-root 2>/dev/null || echo "unknown")
+    log_warn "WP-CLI już zainstalowane: ${WP_VER} — pomijam"
+else
+    log_info "Pobieranie WP-CLI..."
+    TMP_WP="/tmp/wp-cli.phar"
+    curl -sS -o "$TMP_WP" https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+
+    log_info "Weryfikacja WP-CLI..."
+    php "$TMP_WP" --info --allow-root > /dev/null 2>&1 || log_error "WP-CLI phar jest nieprawidłowy"
+
+    chmod +x "$TMP_WP"
+    mv "$TMP_WP" /usr/local/bin/wp
+fi
+
+WP_VER=$(wp --version --allow-root 2>/dev/null || echo "installed")
+log_ok "WP-CLI: ${WP_VER}"
+
+# ==============================================================================
+# STEP 11: Install Certbot + UFW firewall
+# ==============================================================================
+log_step "Instalacja Certbot + konfiguracja UFW"
+
+log_info "Instalowanie Certbot..."
+apt-get install -y certbot python3-certbot-nginx > /dev/null 2>&1
+log_ok "Certbot zainstalowany"
+
+log_info "Konfigurowanie UFW (firewall)..."
+apt-get install -y ufw > /dev/null 2>&1
+
+# Enable UFW (--force skips the interactive prompt)
+ufw --force enable > /dev/null 2>&1
+
+# Allow essential ports
+ufw allow 22/tcp  > /dev/null 2>&1
+ufw allow 80/tcp  > /dev/null 2>&1
+ufw allow 443/tcp > /dev/null 2>&1
+
+log_ok "UFW aktywny. Porty 22, 80, 443 odblokowane."
+
+UFW_STATUS=$(ufw status | head -1)
+log_info "UFW status: ${UFW_STATUS}"
+
+# ==============================================================================
+# STEP 11b: Install Docker
+# ==============================================================================
+log_step "Instalacja Docker"
+
+log_info "Instalowanie Docker Engine..."
+apt-get install -y ca-certificates curl gnupg > /dev/null 2>&1
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg > /dev/null 2>&1
+chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update -qq > /dev/null 2>&1
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null 2>&1
+systemctl enable docker > /dev/null 2>&1
+systemctl start docker > /dev/null 2>&1
+DOCKER_VER=$(docker --version 2>/dev/null | grep -oP 'version \K[\d.]+' || echo "unknown")
+log_ok "Docker ${DOCKER_VER} zainstalowany i uruchomiony"
+
+# Create Docker data directory
+mkdir -p /opt/docker-data
+log_ok "Katalog danych Docker: /opt/docker-data"
+
+# ==============================================================================
+# STEP 12: Clone and build OVERPANEL
+# ==============================================================================
+log_step "Klonowanie i budowanie OVERPANEL"
+
+INSTALL_DIR=/opt/overpanel
+REPO_URL="https://github.com/jurfader/overpanel.git"
+
+# --- Resolve clone URL (support private repo via GH_TOKEN) ---
+GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+if [[ -n "$GH_TOKEN" ]]; then
+    CLONE_URL="https://${GH_TOKEN}@github.com/jurfader/overpanel.git"
+    log_ok "Używam tokenu GitHub do klonowania"
+else
+    CLONE_URL="$REPO_URL"
+fi
+
+# --- Clone or update ---
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+    log_info "Repozytorium już istnieje — aktualizowanie..."
+    if [[ -n "$GH_TOKEN" ]]; then
+        git -C "$INSTALL_DIR" remote set-url origin "$CLONE_URL" 2>/dev/null || true
+    fi
+    git -C "$INSTALL_DIR" pull --ff-only 2>/dev/null || {
+        log_warn "git pull nie powiódł się — kontynuuję z aktualnym stanem"
+    }
+    log_ok "Repozytorium zaktualizowane"
+else
+    log_info "Klonowanie repozytorium OVERPANEL..."
+    git clone "$CLONE_URL" "$INSTALL_DIR" 2>/dev/null || {
+        log_warn "Klonowanie GitHub nie powiodło się — używam bieżącego katalogu jako dev mode"
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        INSTALL_DIR="$SCRIPT_DIR"
+        log_info "Katalog instalacji: ${INSTALL_DIR}"
+    }
+fi
+
+cd "$INSTALL_DIR"
+
+# --- Install dependencies ---
+log_info "Instalowanie zależności pnpm..."
+pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+log_ok "Zależności zainstalowane"
+
+# --- Build shared packages ---
+log_info "Budowanie pakietu @overpanel/shared..."
+pnpm --filter @overpanel/shared build 2>/dev/null || log_warn "@overpanel/shared build failed (może nie istnieć)"
+
+log_info "Budowanie pakietu @overpanel/db..."
+pnpm --filter @overpanel/db build 2>/dev/null || log_warn "@overpanel/db build failed (może nie istnieć)"
+
+# --- Generate secrets ---
+JWT_SECRET=$(openssl rand -base64 32)
+DB_PATH="${INSTALL_DIR}/packages/db/panel.db"
+
+# --- Create .env for API ---
+log_info "Tworzenie pliku .env dla API..."
+mkdir -p "${INSTALL_DIR}/apps/api"
+cat > "${INSTALL_DIR}/apps/api/.env" << EOF
+DATABASE_URL="file:${DB_PATH}"
+JWT_SECRET="${JWT_SECRET}"
+PORT=4000
+HOST=0.0.0.0
+FRONTEND_URL=https://${PANEL_DOMAIN}
+MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASS}
+SSL_EMAIL=${ADMIN_EMAIL}
+CF_API_TOKEN=${CF_API_TOKEN}
+EOF
+log_ok ".env API zapisany"
+
+# --- Create .env.local for Web ---
+log_info "Tworzenie pliku .env.local dla Web..."
+mkdir -p "${INSTALL_DIR}/apps/web"
+cat > "${INSTALL_DIR}/apps/web/.env.local" << EOF
+NEXT_PUBLIC_API_URL=http://localhost:4000
+EOF
+log_ok ".env.local Web zapisany"
+
+# --- Push DB schema ---
+log_info "Aktualizowanie schematu bazy danych (Prisma db push)..."
+cd "$INSTALL_DIR"
+pnpm --filter @overpanel/db exec prisma db push --skip-generate 2>/dev/null \
+    || log_warn "Prisma db push nie powiódł się — baza danych może wymagać ręcznej migracji"
+
+# --- Create admin user ---
+log_info "Tworzenie użytkownika administratora..."
+ADMIN_HASH=$(node -e "
+const bcrypt = require('bcrypt');
+bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
+" 2>/dev/null) || {
+    # Fallback: try bcryptjs
+    ADMIN_HASH=$(node -e "
+const bcrypt = require('bcryptjs');
+bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
+" 2>/dev/null) || log_warn "Nie można zahashować hasła — utwórz admina ręcznie"
+}
+
+if [[ -n "${ADMIN_HASH:-}" ]]; then
+    node -e "
+const { PrismaClient } = require('@overpanel/db');
+const p = new PrismaClient();
+p.user.upsert({
+  where:  { email: '${ADMIN_EMAIL}' },
+  update: { passwordHash: '${ADMIN_HASH}', role: 'admin' },
+  create: {
+    email:        '${ADMIN_EMAIL}',
+    name:         'Administrator',
+    passwordHash: '${ADMIN_HASH}',
+    role:         'admin'
+  }
+}).then(() => {
+  console.log('OK');
+  return p.\$disconnect();
+}).catch(e => {
+  console.error(e.message);
+  process.exit(1);
+});
+" 2>/dev/null && log_ok "Użytkownik admin '${ADMIN_EMAIL}' utworzony/zaktualizowany" \
+    || log_warn "Nie można utworzyć admina przez Prisma — sprawdź schemat DB"
+fi
+
+# --- Build apps ---
+log_info "Budowanie @overpanel/api..."
+pnpm --filter @overpanel/api build 2>/dev/null || log_warn "@overpanel/api build pominięty (może używać ts-node w trybie dev)"
+
+log_info "Budowanie @overpanel/web (Next.js)..."
+pnpm --filter @overpanel/web build
+log_ok "Aplikacje zbudowane"
+
+cd "$INSTALL_DIR"
+
+# ==============================================================================
+# STEP 13: Configure Nginx
+# ==============================================================================
+log_step "Konfiguracja Nginx dla OVERPANEL"
+
+log_info "Zapisywanie konfiguracji Nginx..."
+cat > /etc/nginx/sites-available/overpanel << 'NGINX_CONF'
+# OVERPANEL — Nginx reverse proxy
+# Generated by install.sh — do not edit manually
+
+server {
+    listen 80;
+    server_name PANEL_DOMAIN_PLACEHOLDER;
+
+    # Frontend — Next.js (port 3333)
+    location / {
+        proxy_pass         http://127.0.0.1:3333;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection 'upgrade';
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 60s;
+    }
+
+    # WebSocket / Socket.IO — API (port 4000)
+    location /socket.io/ {
+        proxy_pass         http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+NGINX_CONF
+
+# Replace domain placeholder with actual domain
+sed -i "s/PANEL_DOMAIN_PLACEHOLDER/${PANEL_DOMAIN}/" /etc/nginx/sites-available/overpanel
+
+# Enable site, disable default
+ln -sf /etc/nginx/sites-available/overpanel /etc/nginx/sites-enabled/overpanel
+rm -f /etc/nginx/sites-enabled/default
+
+# Test and reload
+nginx -t 2>/dev/null && systemctl reload nginx
+log_ok "Nginx skonfigurowany i przeładowany"
+
+# ==============================================================================
+# STEP 14: SSL certificate (Certbot)
+# ==============================================================================
+log_step "Uzyskiwanie certyfikatu SSL (Let's Encrypt)"
+
+log_info "Domena: ${PANEL_DOMAIN}"
+log_info "E-mail: ${ADMIN_EMAIL}"
+log_warn "Upewnij się, że DNS domeny wskazuje na ten serwer przed kontynuowaniem."
+
+# Run certbot — if it fails, warn but don't abort the whole install
+certbot --nginx \
+    -d "${PANEL_DOMAIN}" \
+    --non-interactive \
+    --agree-tos \
+    -m "${ADMIN_EMAIL}" \
+    --redirect \
+    2>/dev/null && {
+    log_ok "Certyfikat SSL uzyskany i skonfigurowany"
+    log_ok "Nginx przeładowany z HTTPS"
+} || {
+    log_warn "Certbot nie powiódł się — panel dostępny tymczasowo przez HTTP"
+    log_warn "Sprawdź DNS i uruchom ręcznie:"
+    log_warn "  certbot --nginx -d ${PANEL_DOMAIN} -m ${ADMIN_EMAIL} --agree-tos --redirect"
+}
+
+# ==============================================================================
+# STEP 15: Create systemd services
+# ==============================================================================
+log_step "Konfiguracja usług systemd"
+
+# --- API service ---
+log_info "Tworzenie overpanel-api.service..."
+cat > /etc/systemd/system/overpanel-api.service << EOF
+[Unit]
+Description=OVERPANEL API (Fastify / Node.js 20)
+Documentation=https://github.com/jurfader/overpanel
+After=network.target mysql.service postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${INSTALL_DIR}/apps/api
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=overpanel-api
+Environment=NODE_ENV=production
+EnvironmentFile=${INSTALL_DIR}/apps/api/.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# --- Web service ---
+log_info "Tworzenie overpanel-web.service..."
+cat > /etc/systemd/system/overpanel-web.service << EOF
+[Unit]
+Description=OVERPANEL Web (Next.js 15)
+Documentation=https://github.com/jurfader/overpanel
+After=network.target overpanel-api.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${INSTALL_DIR}/apps/web
+ExecStart=/usr/bin/node .next/standalone/server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=overpanel-web
+Environment=NODE_ENV=production
+Environment=PORT=3333
+Environment=HOSTNAME=0.0.0.0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload daemon and enable / start services
+log_info "Przeładowywanie systemd i uruchamianie usług..."
+systemctl daemon-reload
+
+systemctl enable overpanel-api overpanel-web > /dev/null 2>&1
+systemctl restart overpanel-api  || log_warn "Nie można uruchomić overpanel-api (sprawdź: journalctl -u overpanel-api)"
+systemctl restart overpanel-web  || log_warn "Nie można uruchomić overpanel-web (sprawdź: journalctl -u overpanel-web)"
+
+# Brief pause to let services start
+sleep 3
+
+API_STATUS=$(systemctl is-active overpanel-api 2>/dev/null || echo "unknown")
+WEB_STATUS=$(systemctl is-active overpanel-web 2>/dev/null || echo "unknown")
+
+[[ "$API_STATUS" == "active" ]] && log_ok "overpanel-api: ${API_STATUS}" || log_warn "overpanel-api: ${API_STATUS}"
+[[ "$WEB_STATUS" == "active" ]] && log_ok "overpanel-web: ${WEB_STATUS}" || log_warn "overpanel-web: ${WEB_STATUS}"
+
+# ==============================================================================
+# Final summary
+# ==============================================================================
+echo ""
+echo -e "${GREEN}${BOLD}"
+echo "  ╔══════════════════════════════════════════════════════╗"
+echo "  ║                                                      ║"
+echo "  ║        OVERPANEL zainstalowany pomyślnie!            ║"
+echo "  ║                                                      ║"
+echo "  ╠══════════════════════════════════════════════════════╣"
+printf "  ║  %-52s║\n" ""
+printf "  ║  URL:     https://%-33s║\n" "${PANEL_DOMAIN}"
+printf "  ║  Login:   %-42s║\n" "${ADMIN_EMAIL}"
+printf "  ║  Hasło:   %-42s║\n" "${ADMIN_PASSWORD}"
+printf "  ║  %-52s║\n" ""
+echo "  ╠══════════════════════════════════════════════════════╣"
+printf "  ║  %-52s║\n" ""
+printf "  ║  MySQL root:      %-33s║\n" "${MYSQL_ROOT_PASS}"
+printf "  ║  PostgreSQL user: overpanel / %-21s║\n" "${PG_PASS}"
+printf "  ║  %-52s║\n" ""
+echo "  ╠══════════════════════════════════════════════════════╣"
+printf "  ║  %-52s║\n" ""
+printf "  ║  Logi API:  journalctl -u overpanel-api -f%-9s║\n" ""
+printf "  ║  Logi Web:  journalctl -u overpanel-web -f%-9s║\n" ""
+printf "  ║  %-52s║\n" ""
+echo "  ╠══════════════════════════════════════════════════════╣"
+printf "  ║  %-52s║\n" ""
+printf "  ║  ⚠  ZAPISZ TE DANE W BEZPIECZNYM MIEJSCU! %-9s║\n" ""
+printf "  ║  %-52s║\n" ""
+echo "  ╚══════════════════════════════════════════════════════╝"
+echo -e "${NC}"
