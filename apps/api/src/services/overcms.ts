@@ -249,18 +249,25 @@ COMPEOF`)
     await runLong(`${dc} up -d`, 120_000)
   })
 
-  // 6. Wait for services to be ready
-  await logStep('Oczekiwanie na gotowość serwisów (15s)', async () => {
-    await new Promise(r => setTimeout(r, 15000))
+  // 6. Wait for PostgreSQL to be healthy (poll instead of fixed sleep)
+  await logStep('Oczekiwanie na gotowość bazy danych', async () => {
+    const pgContainer = `overcms-pg-${containerPrefix}`
+    for (let i = 0; i < 30; i++) {
+      try {
+        const { stdout } = await run(`docker exec ${pgContainer} pg_isready -U overcms 2>/dev/null`)
+        if (stdout.includes('accepting connections')) break
+      } catch {}
+      await new Promise(r => setTimeout(r, 2000))
+    }
   })
 
-  // 7. Run database migration and seed
+  // 7. Run database migration and seed (no silent catch — errors must be visible)
   await logStep('Migracja bazy danych', async () => {
-    await runLong(`${dc} exec -T api npx drizzle-kit push`).catch(() => {})
+    await runLong(`${dc} exec -T api npx drizzle-kit push`)
   })
 
   await logStep('Tworzenie konta admina', async () => {
-    await runLong(`${dc} exec -T -e ADMIN_EMAIL=${adminEmail} -e ADMIN_PASSWORD=${adminPassword} api npx tsx packages/core/src/db/seed.ts`).catch(() => {})
+    await runLong(`${dc} exec -T -e ADMIN_EMAIL=${adminEmail} -e ADMIN_PASSWORD=${adminPassword} api npx tsx packages/core/src/db/seed.ts`)
   })
 
   // 8. Store port mapping
