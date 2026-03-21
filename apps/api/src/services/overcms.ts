@@ -126,8 +126,10 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
     }
   }
 
-  // 1. Clean up previous failed install & create directory
-  await logStep('Tworzenie katalogu instalacji', async () => {
+  // 1. Clean up previous install (containers + volumes + directory)
+  await logStep('Czyszczenie poprzedniej instalacji', async () => {
+    const dc = `cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml`
+    await runLong(`${dc} down -v 2>/dev/null || true`, 60_000)
     await run(`rm -rf ${installDir}`)
     await run(`mkdir -p ${installDir}`)
   })
