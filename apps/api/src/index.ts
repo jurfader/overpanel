@@ -27,6 +27,7 @@ import { nodejsRoutes } from './routes/nodejs.js'
 import { phpRoutes } from './routes/php.js'
 import { sslRoutes } from './routes/ssl.js'
 import { mailRoutes } from './routes/mail.js'
+import { webmailRoutes } from './routes/webmail.js'
 import { licensesRoutes } from './routes/licenses.js'
 import { startStatsEmitter } from './system/stats-emitter.js'
 import { startBackupScheduler } from './services/backup-scheduler.js'
@@ -95,6 +96,7 @@ async function bootstrap() {
   await fastify.register(phpRoutes, { prefix: '/api/php' })
   await fastify.register(sslRoutes, { prefix: '/api/ssl' })
   await fastify.register(mailRoutes, { prefix: '/api/mail' })
+  await fastify.register(webmailRoutes, { prefix: '/api/webmail' })
   await fastify.register(licensesRoutes, { prefix: '/api/licenses' })
 
   // ── Health check ──────────────────────────────────────────────────────────
