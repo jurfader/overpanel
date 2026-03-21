@@ -258,7 +258,7 @@ COMPEOF`)
   })
 
   await logStep('Tworzenie konta admina', async () => {
-    await runLong(`${dc} exec -T api npx tsx packages/core/src/db/seed.ts`).catch(() => {})
+    await runLong(`${dc} exec -T -e ADMIN_EMAIL=${adminEmail} -e ADMIN_PASSWORD=${adminPassword} api npx tsx packages/core/src/db/seed.ts`).catch(() => {})
   })
 
   // 8. Store port mapping
