@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { api, ApiError } from '@/lib/api'
-import { Globe, Lock, ArrowLeft, X } from 'lucide-react'
+import { Globe, Lock, ArrowLeft, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 
 // ── Site types ─────────────────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ interface CreateSiteModalProps {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalProps) {
-  const [step, setStep] = useState<'type' | 'config'>('type')
+  const [step, setStep] = useState<'type' | 'config' | 'installing'>('type')
   const [siteType, setSiteType] = useState<SiteType | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -155,17 +155,67 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   const [cmsAdminEmail, setCmsAdminEmail] = useState('')
   const [cmsAdminPassword, setCmsAdminPassword] = useState('')
 
+  // Install progress (OverCMS)
+  const [installLog, setInstallLog] = useState<string[]>([])
+  const [installStatus, setInstallStatus] = useState<'running' | 'success' | 'failed'>('running')
+  const [installStep, setInstallStep] = useState('')
+  const logEndRef = useRef<HTMLDivElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Auto-scroll log
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [installLog])
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
+
   // ESC key
   useEffect(() => {
     if (!open) return
-    const handler = (e: KeyboardEvent) => e.key === 'Escape' && handleClose()
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && step !== 'installing') handleClose()
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [open])
+  }, [open, step])
 
   if (!open) return null
 
+  function startPolling(targetDomain: string) {
+    setStep('installing')
+    setInstallLog(['Rozpoczynanie instalacji OverCMS...'])
+    setInstallStatus('running')
+    setInstallStep('')
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await api.get<{ data: { status: string; step: string; log: string[] } | null }>(`/api/sites/install-status/${targetDomain}`)
+        if (res.data) {
+          setInstallLog(res.data.log)
+          setInstallStep(res.data.step)
+          if (res.data.status === 'success' || res.data.status === 'failed') {
+            setInstallStatus(res.data.status as 'success' | 'failed')
+            if (pollRef.current) clearInterval(pollRef.current)
+            pollRef.current = null
+            if (res.data.status === 'success') {
+              onSuccess()
+            }
+          }
+        }
+      } catch {
+        // API might be temporarily unreachable
+      }
+    }, 2000)
+  }
+
   const handleClose = () => {
+    if (step === 'installing' && installStatus === 'running') return // can't close during install
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     onClose()
     setTimeout(() => {
       setStep('type')
@@ -178,6 +228,9 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
       setWpAdmin('')
       setWpEmail('')
       setWpPassword('')
+      setInstallLog([])
+      setInstallStatus('running')
+      setInstallStep('')
     }, 300)
   }
 
@@ -223,6 +276,10 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
           adminPassword: cmsAdminPassword,
           licenseKey: cmsLicenseKey || undefined,
         })
+        // Start polling for install progress — don't close modal
+        setLoading(false)
+        startPolling(domain)
+        return
       } else if (siteType === 'nodejs') {
         await api.post('/api/sites', {
           domain,
@@ -264,7 +321,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
       {/* Modal */}
       <div
         className="relative glass-card rounded-2xl border border-white/10 shadow-2xl w-full flex flex-col transition-all duration-300"
-        style={{ maxWidth: step === 'type' ? '680px' : '480px', maxHeight: 'calc(100vh - 2rem)' }}
+        style={{ maxWidth: step === 'type' ? '680px' : step === 'installing' ? '600px' : '480px', maxHeight: 'calc(100vh - 2rem)' }}
       >
         {/* Header — sticky */}
         <div className="flex-shrink-0 flex items-center justify-between px-6 py-5 border-b border-white/[0.06]">
@@ -279,24 +336,88 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
             )}
             <div>
               <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                {step === 'type' ? 'Nowa strona WWW' : `Strona ${SITE_TYPES.find(t => t.id === siteType)?.label}`}
+                {step === 'type' ? 'Nowa strona WWW' : step === 'installing' ? 'Instalacja OverCMS' : `Strona ${SITE_TYPES.find(t => t.id === siteType)?.label}`}
               </h2>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                {step === 'type' ? 'Wybierz typ środowiska' : 'Skonfiguruj domenę i parametry'}
+                {step === 'type' ? 'Wybierz typ środowiska' : step === 'installing' ? domain : 'Skonfiguruj domenę i parametry'}
               </p>
             </div>
           </div>
-          <button
-            onClick={handleClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {step !== 'installing' || installStatus !== 'running' ? (
+            <button
+              onClick={handleClose}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : null}
         </div>
 
         {/* Body — scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
-          {step === 'type' ? (
+          {step === 'installing' ? (
+            // ── STEP 3: Install progress ────────────────────────────────────────
+            <div className="space-y-4">
+              {/* Status header */}
+              <div className="flex items-center gap-3">
+                <div className={`w-2.5 h-2.5 rounded-full ${installStatus === 'running' ? 'bg-amber-400 animate-pulse' : installStatus === 'success' ? 'bg-green-400' : 'bg-red-400'}`} />
+                <span className="text-sm font-medium text-[var(--text-secondary)]">
+                  {installStatus === 'running' ? installStep || 'Uruchamianie...' : installStatus === 'success' ? 'Instalacja zakończona' : 'Instalacja nieudana'}
+                </span>
+                {installStatus === 'running' && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-auto" />}
+              </div>
+
+              {/* Terminal log */}
+              <div
+                className="h-80 overflow-y-auto rounded-xl p-4 font-mono text-xs leading-relaxed border border-white/[0.06]"
+                style={{ backgroundColor: '#0a0a0f' }}
+              >
+                {installLog.map((line, i) => (
+                  <div
+                    key={i}
+                    className={`whitespace-pre-wrap break-all ${
+                      line.startsWith('✓') ? 'text-green-400' :
+                      line.startsWith('✗') ? 'text-red-400' :
+                      line.startsWith('>') ? 'text-amber-400' :
+                      'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {line}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
+
+              {/* Result banners */}
+              {installStatus === 'success' && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-green-400">OverCMS zainstalowany pomyślnie!</p>
+                    <p className="text-xs text-green-400/70 mt-0.5">Panel admina dostępny pod adresem <code className="text-green-300">https://{domain}</code></p>
+                  </div>
+                </div>
+              )}
+              {installStatus === 'failed' && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-red-400">Instalacja nie powiodła się.</p>
+                    <p className="text-xs text-red-400/70 mt-0.5">Sprawdź logi powyżej, aby poznać przyczynę błędu.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Close button (only when done) */}
+              {installStatus !== 'running' && (
+                <div className="flex justify-end pt-1">
+                  <Button onClick={handleClose}>
+                    Zamknij
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : step === 'type' ? (
             // ── STEP 1: Type picker ────────────────────────────────────────────
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {SITE_TYPES.map((type) => (

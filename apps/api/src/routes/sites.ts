@@ -202,6 +202,14 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     return reply.code(201).send({ success: true, data: site })
   })
 
+  // GET /api/sites/install-status/:domain — live install progress
+  fastify.get('/install-status/:domain', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { domain } = request.params as { domain: string }
+    const { readInstallStatus } = await import('../services/overcms.js')
+    const data = await readInstallStatus(domain)
+    return reply.send({ success: true, data })
+  })
+
   // PATCH /api/sites/:id — edytuj (status, PHP version)
   fastify.patch('/:id', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { id } = request.params as { id: string }

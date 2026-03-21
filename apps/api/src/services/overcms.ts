@@ -9,11 +9,43 @@ import { run } from './shell.js'
 import { randomBytes } from 'crypto'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { writeFile } from 'fs/promises'
+import { existsSync } from 'fs'
+import { readFile } from 'fs/promises'
 
 const execAsync = promisify(exec)
 
 const OVERCMS_REPO = 'https://github.com/jurfader/over-cms.git'
 const OVERCMS_BASE_DIR = '/opt/overcms-sites'
+const INSTALL_STATUS_DIR = '/tmp'
+
+// ── Install status helpers ──────────────────────────────────────────────────
+
+export interface InstallStatus {
+  status: 'running' | 'success' | 'failed'
+  step: string
+  log: string[]
+  startedAt: string
+  completedAt?: string
+}
+
+function statusFile(domain: string): string {
+  return `${INSTALL_STATUS_DIR}/overcms-install-${domain.replace(/[^a-z0-9.-]/g, '')}.json`
+}
+
+async function writeInstallStatus(domain: string, data: InstallStatus): Promise<void> {
+  await writeFile(statusFile(domain), JSON.stringify(data, null, 2), 'utf-8')
+}
+
+export async function readInstallStatus(domain: string): Promise<InstallStatus | null> {
+  const f = statusFile(domain)
+  if (!existsSync(f)) return null
+  try {
+    return JSON.parse(await readFile(f, 'utf-8'))
+  } catch {
+    return null
+  }
+}
 
 function generatePassword(len = 24): string {
   return randomBytes(len).toString('base64url').slice(0, len)
@@ -71,14 +103,34 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
 
   const containerPrefix = safeDomain.replace(/\./g, '-')
 
+  const log: string[] = []
+  const startedAt = new Date().toISOString()
+
+  async function logStep(step: string, fn: () => Promise<void>): Promise<void> {
+    log.push(`> ${step}`)
+    await writeInstallStatus(domain, { status: 'running', step, log, startedAt })
+    try {
+      await fn()
+      log.push(`✓ ${step}`)
+      await writeInstallStatus(domain, { status: 'running', step, log, startedAt })
+    } catch (err: any) {
+      log.push(`✗ ${step}: ${err.message}`)
+      await writeInstallStatus(domain, { status: 'failed', step, log, startedAt, completedAt: new Date().toISOString() })
+      throw err
+    }
+  }
+
   // 1. Create directory
-  await run(`mkdir -p ${installDir}`)
+  await logStep('Tworzenie katalogu instalacji', async () => {
+    await run(`mkdir -p ${installDir}`)
+  })
 
   // 2. Clone repo with GitHub token
-  const token = ghToken || process.env.GH_TOKEN || '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'
-  const cloneUrl = OVERCMS_REPO.replace('https://', `https://${token}@`)
-
-  await runLong(`git clone ${cloneUrl} ${installDir}/app`)
+  await logStep('Klonowanie repozytorium OverCMS', async () => {
+    const token = ghToken || process.env.GH_TOKEN || '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'
+    const cloneUrl = OVERCMS_REPO.replace('https://', `https://${token}@`)
+    await runLong(`git clone ${cloneUrl} ${installDir}/app`)
+  })
 
   // 3. Generate .env
   const envContent = `
@@ -130,9 +182,11 @@ PORTAL_DOMAIN=${domain}
 ACME_EMAIL=${adminEmail}
 `.trim()
 
-  await run(`cat > ${installDir}/app/.env << 'ENVEOF'
+  await logStep('Generowanie konfiguracji .env', async () => {
+    await run(`cat > ${installDir}/app/.env << 'ENVEOF'
 ${envContent}
 ENVEOF`)
+  })
 
   // 4. Create custom docker-compose.override.yml (no Traefik, expose ports directly)
   const composeOverride = `
@@ -169,24 +223,46 @@ services:
     profiles: ["disabled"]
 `.trim()
 
-  await run(`cat > ${installDir}/app/docker-compose.override.yml << 'COMPEOF'
+  await logStep('Generowanie docker-compose.override.yml', async () => {
+    await run(`cat > ${installDir}/app/docker-compose.override.yml << 'COMPEOF'
 ${composeOverride}
 COMPEOF`)
+  })
+
+  const dc = `cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml`
 
   // 5. Build and start containers (long timeout — Docker builds are slow)
-  await runLong(`cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml up -d --build`, 600_000)
+  await logStep('Budowanie obrazów Docker (może potrwać kilka minut...)', async () => {
+    await runLong(`${dc} build`, 600_000)
+  })
+
+  await logStep('Uruchamianie kontenerów', async () => {
+    await runLong(`${dc} up -d`, 120_000)
+  })
 
   // 6. Wait for services to be ready
-  await new Promise(r => setTimeout(r, 15000))
+  await logStep('Oczekiwanie na gotowość serwisów (15s)', async () => {
+    await new Promise(r => setTimeout(r, 15000))
+  })
 
   // 7. Run database migration and seed
-  await runLong(`cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml exec -T api npx drizzle-kit push`).catch(() => {})
-  await runLong(`cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml exec -T api npx tsx packages/core/src/db/seed.ts`).catch(() => {})
+  await logStep('Migracja bazy danych', async () => {
+    await runLong(`${dc} exec -T api npx drizzle-kit push`).catch(() => {})
+  })
+
+  await logStep('Tworzenie konta admina', async () => {
+    await runLong(`${dc} exec -T api npx tsx packages/core/src/db/seed.ts`).catch(() => {})
+  })
 
   // 8. Store port mapping
-  await run(`cat > ${installDir}/ports.json << 'EOF'
+  await logStep('Zapisywanie konfiguracji portów', async () => {
+    await run(`cat > ${installDir}/ports.json << 'EOF'
 {"apiPort":${apiPort},"adminPort":${adminPort},"licensePort":${licensePort},"portalPort":${portalPort},"pgPort":${pgPort},"redisPort":${redisPort},"minioPort":${minioPort}}
 EOF`)
+  })
+
+  log.push('✓ Instalacja OverCMS zakończona pomyślnie!')
+  await writeInstallStatus(domain, { status: 'success', step: 'done', log, startedAt, completedAt: new Date().toISOString() })
 
   return {
     apiUrl: `http://localhost:${apiPort}`,
