@@ -51,12 +51,24 @@ const resetPasswordSchema = z.object({
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 
-async function getCfToken(): Promise<string> {
-  const row = await prisma.setting.findUnique({ where: { key: 'cf_global_token' } })
-  if (!row?.value) {
-    throw new Error('Cloudflare token not configured (cf_global_token)')
+async function getCfToken(userId?: string): Promise<string> {
+  // 1. Try user's default CF token from CloudflareToken table
+  if (userId) {
+    const userToken = await prisma.cloudflareToken.findFirst({
+      where: { userId, isDefault: true },
+      select: { token: true },
+    })
+    if (userToken?.token) return userToken.token
   }
-  return row.value
+  // 2. Try any admin's default token
+  const adminToken = await prisma.cloudflareToken.findFirst({
+    where: { isDefault: true },
+    select: { token: true },
+  })
+  if (adminToken?.token) return adminToken.token
+  // 3. Try environment variable
+  if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN
+  throw new Error('Brak skonfigurowanego tokenu Cloudflare')
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────────
