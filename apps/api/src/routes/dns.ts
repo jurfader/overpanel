@@ -73,7 +73,7 @@ export async function dnsRoutes(fastify: FastifyInstance) {
     if (!token) return reply.code(400).send({ success: false, error: 'Brak tokenu Cloudflare' })
 
     try {
-      const record = await createDnsRecord(token, zoneId, body.data)
+      const record = await createDnsRecord(token, zoneId, body.data as any)
       return reply.code(201).send({ success: true, data: record })
     } catch (err) {
       if (err instanceof CloudflareError) return reply.code(502).send({ success: false, error: err.message })
@@ -123,7 +123,7 @@ export async function dnsRoutes(fastify: FastifyInstance) {
     if (!token) return reply.code(400).send({ success: false, error: 'Brak tokenu Cloudflare' })
 
     try {
-      const record = await replaceDnsRecord(token, zoneId, recordId, body.data)
+      const record = await replaceDnsRecord(token, zoneId, recordId, body.data as any)
       return reply.send({ success: true, data: record })
     } catch (err) {
       if (err instanceof CloudflareError) return reply.code(502).send({ success: false, error: err.message })

@@ -58,7 +58,7 @@ export async function firewallRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      await addUfwRule(body.data)
+      await addUfwRule(body.data as any)
       return reply.code(201).send({ success: true })
     } catch (err: any) {
       return reply.code(500).send({ success: false, error: err.message })
