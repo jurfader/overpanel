@@ -96,18 +96,15 @@ function Breadcrumbs({
   currentPath: string
   onNavigate: (p: string) => void
 }) {
-  // currentPath is like "" | "/domain.com" | "/domain.com/public"
-  // We always show /var/www as root
-  const cleanPath = currentPath === '/' ? '' : currentPath
-  const segments = cleanPath.split('/').filter(Boolean) // e.g. ["domain.com", "public"]
+  const segments = currentPath.split('/').filter(Boolean)
 
   return (
     <nav className="flex items-center gap-1 text-sm flex-wrap">
       <button
         className="text-[var(--primary)] hover:underline font-medium"
-        onClick={() => onNavigate('/var/www')}
+        onClick={() => onNavigate('/')}
       >
-        /var/www
+        /
       </button>
       {segments.map((seg, i) => {
         const pathUpTo = '/' + segments.slice(0, i + 1).join('/')
@@ -120,7 +117,7 @@ function Breadcrumbs({
             ) : (
               <button
                 className="text-[var(--primary)] hover:underline"
-                onClick={() => onNavigate('/var/www' + pathUpTo)}
+                onClick={() => onNavigate(pathUpTo)}
               >
                 {seg}
               </button>
@@ -153,7 +150,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function FilesPage() {
-  const [currentPath, setCurrentPath] = useState('/var/www')
+  const [currentPath, setCurrentPath] = useState('/')
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -7,7 +7,7 @@ import path from 'path'
 import { createReadStream } from 'fs'
 import { run } from '../services/shell.js'
 
-const ROOT = '/var/www'
+const CLIENT_ROOT = '/var/www'
 
 const TEXT_EXTENSIONS = new Set([
   '.php', '.html', '.htm', '.css', '.js', '.ts', '.json', '.txt', '.md',
@@ -17,7 +17,7 @@ const TEXT_EXTENSIONS = new Set([
 
 interface FileEntry {
   name: string
-  path: string       // relative to /var/www
+  path: string
   type: 'file' | 'directory'
   size: number
   modifiedAt: string
@@ -25,26 +25,36 @@ interface FileEntry {
   extension?: string
 }
 
-function safePath(inputPath: string): string {
+function getRoot(role: string): string {
+  return role === 'admin' ? '/' : CLIENT_ROOT
+}
+
+function safePath(inputPath: string, root: string): string {
+  if (root === '/') {
+    // Admin: resolve absolute path, block relative traversal
+    const resolved = path.resolve('/', inputPath)
+    return resolved
+  }
   const cleaned = inputPath.replace(/^\/+/, '')
-  const resolved = path.resolve(ROOT, cleaned)
-  if (!resolved.startsWith(ROOT + '/') && resolved !== ROOT) {
+  const resolved = path.resolve(root, cleaned)
+  if (!resolved.startsWith(root + '/') && resolved !== root) {
     throw new Error('Path traversal detected')
   }
   return resolved
 }
 
-function toRelative(absPath: string): string {
-  return absPath.slice(ROOT.length) || '/'
+function toRelative(absPath: string, root: string): string {
+  if (root === '/') return absPath
+  return absPath.slice(root.length) || '/'
 }
 
-async function buildEntry(dir: string, name: string): Promise<FileEntry> {
+async function buildEntry(dir: string, name: string, root: string): Promise<FileEntry> {
   const full = path.join(dir, name)
   const s = await stat(full)
   const ext = path.extname(name).toLowerCase()
   return {
     name,
-    path: toRelative(full),
+    path: toRelative(full, root),
     type: s.isDirectory() ? 'directory' : 'file',
     size: s.size,
     modifiedAt: s.mtime.toISOString(),
@@ -57,11 +67,12 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── GET /list ────────────────────────────────────────────────────────────────
   fastify.get('/list', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const query = request.query as { path?: string }
 
     let targetPath: string
     try {
-      targetPath = query.path ? safePath(query.path) : ROOT
+      targetPath = query.path ? safePath(query.path, root) : root
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
@@ -73,7 +84,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return targetPath.startsWith(siteRoot + '/') || targetPath === siteRoot
       })
       if (!allowed) {
@@ -93,7 +104,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
     }
 
     const entries = await Promise.all(
-      names.map((name) => buildEntry(targetPath, name).catch(() => null))
+      names.map((name) => buildEntry(targetPath, name, root).catch(() => null))
     )
 
     const valid = entries.filter((e): e is FileEntry => e !== null)
@@ -103,13 +114,15 @@ export async function filesRoutes(fastify: FastifyInstance) {
       return a.name.localeCompare(b.name)
     })
 
-    const currentPath = toRelative(targetPath)
+    const currentPath = toRelative(targetPath, root)
     const parentAbs = path.dirname(targetPath)
     const parentPath =
-      targetPath === ROOT
+      targetPath === root
         ? null
-        : parentAbs.startsWith(ROOT)
-        ? toRelative(parentAbs)
+        : root === '/'
+        ? (parentAbs === '/' ? null : parentAbs)
+        : parentAbs.startsWith(root)
+        ? toRelative(parentAbs, root)
         : null
 
     return reply.send({
@@ -121,6 +134,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── GET /read ────────────────────────────────────────────────────────────────
   fastify.get('/read', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const query = request.query as { path?: string }
 
     if (!query.path) {
@@ -129,7 +143,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
 
     let abs: string
     try {
-      abs = safePath(query.path)
+      abs = safePath(query.path, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
@@ -141,7 +155,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return abs.startsWith(siteRoot + '/') || abs === siteRoot
       })
       if (!allowed) {
@@ -167,12 +181,13 @@ export async function filesRoutes(fastify: FastifyInstance) {
     }
 
     const content = await readFile(abs, 'utf-8')
-    return reply.send({ success: true, data: { content, path: toRelative(abs) } })
+    return reply.send({ success: true, data: { content, path: toRelative(abs, root) } })
   })
 
   // ── POST /write ──────────────────────────────────────────────────────────────
   fastify.post('/write', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const body = request.body as { path?: string; content?: string }
 
     if (!body.path || body.content === undefined) {
@@ -181,7 +196,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
 
     let abs: string
     try {
-      abs = safePath(body.path)
+      abs = safePath(body.path, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
@@ -192,7 +207,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return abs.startsWith(siteRoot + '/') || abs === siteRoot
       })
       if (!allowed) {
@@ -214,6 +229,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── POST /mkdir ──────────────────────────────────────────────────────────────
   fastify.post('/mkdir', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const body = request.body as { path?: string }
 
     if (!body.path) {
@@ -222,7 +238,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
 
     let abs: string
     try {
-      abs = safePath(body.path)
+      abs = safePath(body.path, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
@@ -233,7 +249,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return abs.startsWith(siteRoot + '/') || abs === siteRoot
       })
       if (!allowed) {
@@ -255,6 +271,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── DELETE /delete ───────────────────────────────────────────────────────────
   fastify.delete('/delete', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const body = request.body as { path?: string }
 
     if (!body.path) {
@@ -263,13 +280,13 @@ export async function filesRoutes(fastify: FastifyInstance) {
 
     let abs: string
     try {
-      abs = safePath(body.path)
+      abs = safePath(body.path, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
 
     // Never allow deleting ROOT itself
-    if (abs === ROOT) {
+    if (abs === root) {
       return reply.code(400).send({ success: false, error: 'Cannot delete root directory' })
     }
 
@@ -279,7 +296,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return abs.startsWith(siteRoot + '/') || abs === siteRoot
       })
       if (!allowed) {
@@ -304,6 +321,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── POST /rename ─────────────────────────────────────────────────────────────
   fastify.post('/rename', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const body = request.body as { from?: string; to?: string }
 
     if (!body.from || !body.to) {
@@ -313,8 +331,8 @@ export async function filesRoutes(fastify: FastifyInstance) {
     let absFrom: string
     let absTo: string
     try {
-      absFrom = safePath(body.from)
-      absTo = safePath(body.to)
+      absFrom = safePath(body.from, root)
+      absTo = safePath(body.to, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
@@ -326,7 +344,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
       })
       const allowed = (p: string) =>
         sites.some((s) => {
-          const siteRoot = path.join(ROOT, s.domain)
+          const siteRoot = path.join(root, s.domain)
           return p.startsWith(siteRoot + '/') || p === siteRoot
         })
       if (!allowed(absFrom) || !allowed(absTo)) {
@@ -345,6 +363,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── GET /download ────────────────────────────────────────────────────────────
   fastify.get('/download', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const query = request.query as { path?: string }
 
     if (!query.path) {
@@ -353,7 +372,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
 
     let abs: string
     try {
-      abs = safePath(query.path)
+      abs = safePath(query.path, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
@@ -364,7 +383,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return abs.startsWith(siteRoot + '/') || abs === siteRoot
       })
       if (!allowed) {
@@ -392,6 +411,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── POST /chmod ───────────────────────────────────────────────────────────────
   fastify.post('/chmod', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const body = request.body as { path?: string; mode?: string }
 
     if (!body.path || !body.mode) {
@@ -404,7 +424,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
 
     let resolvedPath: string
     try {
-      resolvedPath = safePath(body.path)
+      resolvedPath = safePath(body.path, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
@@ -415,7 +435,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return resolvedPath.startsWith(siteRoot + '/') || resolvedPath === siteRoot
       })
       if (!allowed) {
@@ -435,6 +455,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
   // ── POST /upload (base64) ─────────────────────────────────────────────────────
   fastify.post('/upload', { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = getRequestUser(request)
+    const root = getRoot(user.role)
     const body = request.body as { path?: string; filename?: string; content?: string }
 
     if (!body.path || !body.filename || !body.content) {
@@ -448,14 +469,14 @@ export async function filesRoutes(fastify: FastifyInstance) {
 
     let absDir: string
     try {
-      absDir = safePath(body.path)
+      absDir = safePath(body.path, root)
     } catch {
       return reply.code(400).send({ success: false, error: 'Invalid path' })
     }
 
     const absFile = path.join(absDir, body.filename)
     // Re-validate the final file path
-    if (!absFile.startsWith(ROOT + '/') && absFile !== ROOT) {
+    if (root !== '/' && !absFile.startsWith(root + '/') && absFile !== root) {
       return reply.code(400).send({ success: false, error: 'Path traversal detected' })
     }
 
@@ -465,7 +486,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
         select: { domain: true },
       })
       const allowed = sites.some((s) => {
-        const siteRoot = path.join(ROOT, s.domain)
+        const siteRoot = path.join(root, s.domain)
         return absFile.startsWith(siteRoot + '/') || absFile === siteRoot
       })
       if (!allowed) {
@@ -493,6 +514,6 @@ export async function filesRoutes(fastify: FastifyInstance) {
       // non-fatal
     }
 
-    return reply.send({ success: true, data: { path: toRelative(absFile) } })
+    return reply.send({ success: true, data: { path: toRelative(absFile, root) } })
   })
 }

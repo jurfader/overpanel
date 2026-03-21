@@ -520,10 +520,34 @@ ufw allow 22/tcp  > /dev/null 2>&1
 ufw allow 80/tcp  > /dev/null 2>&1
 ufw allow 443/tcp > /dev/null 2>&1
 
-log_ok "UFW aktywny. Porty 22, 80, 443 odblokowane."
+ufw allow 21/tcp  > /dev/null 2>&1
+ufw allow 30000:30100/tcp > /dev/null 2>&1
+log_ok "UFW aktywny. Porty 22, 80, 443, 21, 30000-30100 odblokowane."
 
 UFW_STATUS=$(ufw status | head -1)
 log_info "UFW status: ${UFW_STATUS}"
+
+# --- Install pure-ftpd ---
+log_info "Instalowanie pure-ftpd..."
+if command -v pure-ftpd &>/dev/null; then
+    log_warn "pure-ftpd już zainstalowane — pomijam"
+else
+    apt-get install -y pure-ftpd > /dev/null 2>&1
+    # Configure virtual users
+    echo "yes" > /etc/pure-ftpd/conf/ChrootEveryone
+    echo "yes" > /etc/pure-ftpd/conf/CreateHomeDir
+    echo "30000 30100" > /etc/pure-ftpd/conf/PassivePortRange
+    echo "yes" > /etc/pure-ftpd/conf/VerboseLog
+    # Use PureDB for virtual users
+    ln -sf /etc/pure-ftpd/conf/PureDB /etc/pure-ftpd/auth/50puredb 2>/dev/null || true
+    echo "/etc/pure-ftpd/pureftpd.pdb" > /etc/pure-ftpd/conf/PureDB
+    # Create empty PureDB if not exists
+    touch /etc/pure-ftpd/pureftpd.passwd
+    pure-pw mkdb 2>/dev/null || true
+    systemctl enable pure-ftpd > /dev/null 2>&1
+    systemctl restart pure-ftpd > /dev/null 2>&1
+    log_ok "pure-ftpd zainstalowany i skonfigurowany"
+fi
 
 # ==============================================================================
 # STEP 11b: Install Docker
