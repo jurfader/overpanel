@@ -36,7 +36,6 @@ import {
   HardDrive,
   AlertTriangle,
   Clock,
-  Mail,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
