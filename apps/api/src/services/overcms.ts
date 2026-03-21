@@ -105,14 +105,14 @@ S3_PUBLIC_URL=https://${domain}/storage
 
 # API
 API_PORT=3000
-API_URL=http://localhost:${apiPort}
+API_URL=http://overcms-api-${containerPrefix}:3000
 API_DOMAIN=${domain}
 BETTER_AUTH_SECRET=${authSecret}
-BETTER_AUTH_URL=http://localhost:${apiPort}
-ADMIN_CORS_ORIGINS=https://admin.${domain},http://localhost:${adminPort}
+BETTER_AUTH_URL=https://${domain}/api
+ADMIN_CORS_ORIGINS=https://${domain},https://admin.${domain}
 
 # Admin
-ADMIN_DOMAIN=admin.${domain}
+ADMIN_DOMAIN=${domain}
 NEXT_PUBLIC_API_URL=https://${domain}/api
 
 # License — centralny serwer licencji (nie lokalny kontener)
