@@ -660,34 +660,22 @@ cd "$INSTALL_DIR"
 
 # --- Create admin user ---
 log_info "Tworzenie użytkownika administratora..."
-# Use bcryptjs (pure JS — no native compilation needed)
-# Try from apps/api where bcryptjs is a direct dependency
-ADMIN_HASH=$(cd "${INSTALL_DIR}/apps/api" && node -e "
-const bcrypt = require('bcryptjs');
-bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
-" 2>/dev/null) || ADMIN_HASH=$(NODE_PATH="${INSTALL_DIR}/node_modules" node -e "
-const bcrypt = require('bcryptjs');
-bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
-" 2>/dev/null) || {
-    log_warn "Nie można zahashować hasła — admin zostanie utworzony przy pierwszym uruchomieniu"
-    log_info "Możesz też uruchomić: cd /opt/overpanel && node packages/db/dist/seed.js"
-}
-
-if [[ -n "${ADMIN_HASH:-}" ]]; then
-    DATABASE_URL="file:${INSTALL_DIR}/packages/db/panel.db" \
-    NODE_PATH="${INSTALL_DIR}/node_modules" \
-    node -e "
-const { PrismaClient } = require('@prisma/client');
-const p = new PrismaClient();
-p.user.upsert({
-  where:  { email: '${ADMIN_EMAIL}' },
-  update: { passwordHash: '${ADMIN_HASH}', role: 'admin' },
-  create: {
-    email:        '${ADMIN_EMAIL}',
-    name:         'Administrator',
-    passwordHash: '${ADMIN_HASH}',
-    role:         'admin'
-  }
+# Use require.resolve with paths to work with pnpm's strict module isolation
+node -e "
+const bcrypt = require(require.resolve('bcryptjs', { paths: ['${INSTALL_DIR}/apps/api'] }));
+const { PrismaClient } = require(require.resolve('@prisma/client', { paths: ['${INSTALL_DIR}/packages/db'] }));
+const p = new PrismaClient({ datasources: { db: { url: 'file:${INSTALL_DIR}/packages/db/panel.db' } } });
+bcrypt.hash('${ADMIN_PASSWORD}', 12).then(hash => {
+  return p.user.upsert({
+    where:  { email: '${ADMIN_EMAIL}' },
+    update: { passwordHash: hash, role: 'admin' },
+    create: {
+      email:        '${ADMIN_EMAIL}',
+      name:         'Administrator',
+      passwordHash: hash,
+      role:         'admin'
+    }
+  });
 }).then(() => {
   console.log('OK');
   return p.\$disconnect();
@@ -696,8 +684,7 @@ p.user.upsert({
   process.exit(1);
 });
 " 2>/dev/null && log_ok "Użytkownik admin '${ADMIN_EMAIL}' utworzony/zaktualizowany" \
-    || log_warn "Nie można utworzyć admina przez Prisma — sprawdź schemat DB"
-fi
+    || log_warn "Nie można utworzyć admina — uruchom ręcznie: node -e \"...\" (patrz dokumentacja)"
 
 # --- Build apps ---
 log_info "Budowanie @overpanel/api..."
