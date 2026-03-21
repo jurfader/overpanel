@@ -126,8 +126,9 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
     }
   }
 
-  // 1. Create directory
+  // 1. Clean up previous failed install & create directory
   await logStep('Tworzenie katalogu instalacji', async () => {
+    await run(`rm -rf ${installDir}`)
     await run(`mkdir -p ${installDir}`)
   })
 
