@@ -192,6 +192,8 @@ apt-get install -y -qq \
     wget \
     git \
     unzip \
+    build-essential \
+    python3 \
     software-properties-common \
     apt-transport-https \
     ca-certificates \
