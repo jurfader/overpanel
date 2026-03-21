@@ -116,11 +116,8 @@ ADMIN_CORS_ORIGINS=https://admin.${domain},http://localhost:${adminPort}
 ADMIN_DOMAIN=admin.${domain}
 NEXT_PUBLIC_API_URL=https://${domain}/api
 
-# License
-LICENSE_PORT=3002
-LICENSE_SERVER_URL=http://overcms-license-${containerPrefix}:3002
-LICENSE_ADMIN_SECRET=${licenseAdminSecret}
-LICENSE_DOMAIN=license.${domain}
+# License — centralny serwer licencji (nie lokalny kontener)
+LICENSE_SERVER_URL=https://license.overcms.pl
 OVERCMS_LICENSE_KEY=${licenseKey || ''}
 OVERCMS_INSTALL_ID=${randomBytes(16).toString('hex')}
 SITE_URL=https://${domain}
@@ -161,13 +158,9 @@ services:
     ports:
       - "${adminPort}:3001"
   license-server:
-    container_name: overcms-license-${containerPrefix}
-    ports:
-      - "${licensePort}:3002"
+    profiles: ["disabled"]
   portal:
-    container_name: overcms-portal-${containerPrefix}
-    ports:
-      - "${portalPort}:3004"
+    profiles: ["disabled"]
   traefik:
     profiles: ["disabled"]
 `.trim()
