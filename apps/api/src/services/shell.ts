@@ -18,3 +18,8 @@ export function esc(value: string): string {
   }
   return value
 }
+
+// Single-quote escape for shell arguments (handles values with spaces, special chars)
+export function sq(str: string): string {
+  return `'${str.replace(/'/g, "'\\''")}'`
+}

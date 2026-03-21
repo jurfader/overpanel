@@ -2,12 +2,7 @@
  * WordPress auto-installer using WP-CLI
  */
 
-import { run, esc } from './shell.js'
-
-// Single-quote shell escaping — safe for any string
-function sq(str: string): string {
-  return `'${str.replace(/'/g, "'\\''")}'`
-}
+import { run, esc, sq } from './shell.js'
 
 export interface WpInstallOptions {
   domain: string

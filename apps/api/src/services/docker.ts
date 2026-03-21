@@ -1,4 +1,4 @@
-import { run } from './shell.js'
+import { run, sq } from './shell.js'
 
 export interface ContainerInfo {
   id: string
@@ -19,10 +19,6 @@ export interface ContainerStats {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function sq(str: string): string {
-  return `'${str.replace(/'/g, "'\\''")}'`
-}
 
 function validateName(name: string): string {
   if (!/^[a-z0-9_-]+$/.test(name)) {

@@ -1,8 +1,4 @@
-import { run, esc } from './shell.js'
-
-function sq(str: string): string {
-  return `'${str.replace(/'/g, "'\\''")}'`
-}
+import { run, esc, sq } from './shell.js'
 
 export interface Pm2App {
   name: string

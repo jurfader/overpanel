@@ -137,7 +137,8 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
 
   // 2. Clone repo with GitHub token
   await logStep('Klonowanie repozytorium OverCMS', async () => {
-    const token = ghToken || process.env.GH_TOKEN || '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'
+    const token = ghToken || process.env.GH_TOKEN
+    if (!token) throw new Error('GH_TOKEN is required for OverCMS installation')
     const cloneUrl = OVERCMS_REPO.replace('https://', `https://${token}@`)
     await runLong(`git clone ${cloneUrl} ${installDir}/app`)
   })
@@ -200,7 +201,6 @@ ENVEOF`)
 
   // 4. Create custom docker-compose.override.yml (no Traefik, expose ports directly)
   const composeOverride = `
-version: "3.8"
 services:
   postgres:
     container_name: overcms-pg-${containerPrefix}

@@ -1,11 +1,6 @@
-import { run, esc } from './shell.js'
+import { run, esc, sq } from './shell.js'
 import { mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
-
-// Single-quote shell escaping for passwords (allows arbitrary characters)
-function sq(str: string): string {
-  return `'${str.replace(/'/g, "'\\''")}'`
-}
 
 function validateUsername(username: string): void {
   if (!/^[a-z][a-z0-9_]{0,31}$/.test(username)) {
