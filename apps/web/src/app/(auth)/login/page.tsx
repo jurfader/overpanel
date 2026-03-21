@@ -102,7 +102,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-[var(--text-muted)] mt-6">
-          OVERPANEL v0.1.0 · Powered by OVERMEDIA
+          OVERPANEL v{process.env.NEXT_PUBLIC_APP_VERSION} · Powered by OVERMEDIA
         </p>
       </div>
     </div>
