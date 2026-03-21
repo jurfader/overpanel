@@ -75,6 +75,20 @@ const SITE_TYPES: SiteTypeOption[] = [
     ),
   },
   {
+    id: 'overcms',
+    label: 'OverCMS',
+    description: 'Własny CMS — Docker Compose + PostgreSQL',
+    available: true,
+    accent: '#E91E8C',
+    icon: (
+      <svg viewBox="0 0 32 32" fill="none" className="w-10 h-10">
+        <circle cx="16" cy="16" r="14" fill="#E91E8C" opacity="0.15" />
+        <circle cx="16" cy="16" r="14" stroke="#E91E8C" strokeWidth="1.5" opacity="0.4" />
+        <text x="16" y="21" textAnchor="middle" fill="#E91E8C" fontSize="8" fontWeight="800" fontFamily="monospace">CMS</text>
+      </svg>
+    ),
+  },
+  {
     id: 'python',
     label: 'Python',
     description: 'Gunicorn / uWSGI + Nginx proxy',
@@ -136,6 +150,11 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   const [wpLocale, setWpLocale] = useState('pl_PL')
   const [wpDbEngine, setWpDbEngine] = useState<'mysql' | 'postgresql'>('mysql')
 
+  // OverCMS-specific
+  const [cmsLicenseKey, setCmsLicenseKey] = useState('')
+  const [cmsAdminEmail, setCmsAdminEmail] = useState('')
+  const [cmsAdminPassword, setCmsAdminPassword] = useState('')
+
   // ESC key
   useEffect(() => {
     if (!open) return
@@ -195,6 +214,15 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
           adminEmail: wpEmail,
           locale: wpLocale,
         })
+      } else if (siteType === 'overcms') {
+        await api.post('/api/sites', {
+          domain,
+          siteType: 'overcms',
+          enableSsl,
+          adminEmail: cmsAdminEmail,
+          adminPassword: cmsAdminPassword,
+          licenseKey: cmsLicenseKey || undefined,
+        })
       } else if (siteType === 'nodejs') {
         await api.post('/api/sites', {
           domain,
@@ -223,6 +251,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   }
 
   const isWordPress = siteType === 'wordpress'
+  const isOverCms = siteType === 'overcms'
   const isStatic = siteType === 'static'
   const isNodeJs = siteType === 'nodejs'
   const isPhpBased = siteType === 'php' || siteType === 'wordpress'
@@ -385,8 +414,43 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                   </>
                 )}
 
+                {/* OverCMS fields */}
+                {isOverCms && (
+                  <>
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">OverCMS</p>
+                      <div className="space-y-3">
+                        <Input
+                          label="E-mail administratora"
+                          placeholder="admin@example.com"
+                          value={cmsAdminEmail}
+                          onChange={(e) => setCmsAdminEmail(e.target.value)}
+                          required
+                        />
+                        <Input
+                          label="Hasło administratora"
+                          type="password"
+                          placeholder="Min. 8 znaków"
+                          value={cmsAdminPassword}
+                          onChange={(e) => setCmsAdminPassword(e.target.value)}
+                          required
+                        />
+                        <Input
+                          label="Klucz licencyjny"
+                          placeholder="XXXX-XXXX-XXXX-XXXX"
+                          value={cmsLicenseKey}
+                          onChange={(e) => setCmsLicenseKey(e.target.value)}
+                        />
+                        <p className="text-[10px] text-[var(--text-muted)]">
+                          Instalacja wymaga klucza licencyjnego OverCMS. Bez klucza CMS będzie działać w trybie trial.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {/* SSL toggle — not for WP (always on) */}
-                {!isWordPress && (
+                {!isWordPress && !isOverCms && (
                   <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">

@@ -18,7 +18,9 @@ async function getUserCfToken(userId: string): Promise<string | null> {
 
 const createSiteSchema = z.object({
   domain: z.string().min(3).regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain'),
-  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static']).default('php'),
+  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms']).default('php'),
+  adminPassword: z.string().optional(),
+  licenseKey: z.string().optional(),
   phpVersion: z.enum(['7.4', '8.0', '8.1', '8.2', '8.3']).default('8.3'),
   appPort: z.number().int().min(1024).max(65535).optional(),
   startCommand: z.string().max(200).optional(),
@@ -103,14 +105,38 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         }
 
         // 2. Nginx vhost — type-aware
-        if (siteType === 'nodejs' || siteType === 'python' || siteType === 'proxy') {
+        if (siteType === 'overcms') {
+          // OverCMS gets its own nginx proxy after Docker containers are up (see step 2b)
+        } else if (siteType === 'nodejs' || siteType === 'python' || siteType === 'proxy') {
           const port = appPort ?? 3000
           await createNginxNodeProxy({ domain, appPort: port })
         } else {
           // php, static — use standard PHP-FPM vhost (static ignores PHP blocks but that's harmless)
           await createNginxVhost({ domain, documentRoot, phpVersion })
         }
-        await reloadNginx()
+        if (siteType !== 'overcms') {
+          await reloadNginx()
+        }
+
+        // 2b. OverCMS installation
+        if (siteType === 'overcms') {
+          try {
+            const { installOverCms } = await import('../services/overcms.js')
+            const { createNginxOverCmsProxy } = await import('../services/nginx.js')
+            const result = await installOverCms({
+              domain,
+              adminEmail: caller.email || 'admin@' + domain,
+              adminPassword: body.data.adminPassword || 'Admin123!',
+              licenseKey: body.data.licenseKey,
+              ghToken: process.env.GH_TOKEN,
+            })
+            await createNginxOverCmsProxy({ domain, apiPort: result.apiPort, adminPort: result.adminPort })
+            await reloadNginx()
+            console.log(`[OverCMS] Installed for ${domain}: API=${result.apiPort}, Admin=${result.adminPort}`)
+          } catch (err: any) {
+            console.error(`[OverCMS] Install failed for ${domain}:`, err.message)
+          }
+        }
 
         // 3. SSL + tunnel — strategia zależy od środowiska
         let hasSSL = false
