@@ -108,6 +108,11 @@ export interface SystemStats {
   }
   uptime: number       // seconds
   loadAvg: [number, number, number]
+  temps?: {
+    cpu: number | null     // main CPU temp °C
+    cores: number[]        // per-core temps
+    max: number | null     // highest temp
+  }
 }
 
 // API responses

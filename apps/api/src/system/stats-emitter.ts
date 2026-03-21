@@ -21,12 +21,13 @@ export function startStatsEmitter(io: SocketServer) {
     if (io.sockets.sockets.size === 0) return // nikogo nie ma, nie zbieraj
 
     try {
-      const [cpuLoad, mem, diskData, netStats, time] = await Promise.all([
+      const [cpuLoad, mem, diskData, netStats, time, cpuTemp] = await Promise.all([
         si.currentLoad(),
         si.mem(),
         si.fsSize(),
         si.networkStats(),
         si.time(),
+        si.cpuTemperature().catch(() => ({ main: null, cores: [], max: null })),
       ])
 
       // Disk — główna partycja /
@@ -57,6 +58,11 @@ export function startStatsEmitter(io: SocketServer) {
         loadAvg: cpuLoad.avgLoad
           ? [cpuLoad.avgLoad, cpuLoad.avgLoad, cpuLoad.avgLoad]
           : [0, 0, 0],
+        temps: {
+          cpu: cpuTemp.main ?? null,
+          cores: (cpuTemp.cores ?? []).filter((t: number) => t > 0),
+          max: cpuTemp.max ?? null,
+        },
       }
 
       io.emit('stats', stats)

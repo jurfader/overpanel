@@ -280,6 +280,45 @@ export default function DashboardPage() {
                       <p className="text-sm font-semibold text-[var(--text-primary)]">{formatUptime(stats.uptime)}</p>
                     </div>
                   </div>
+
+                  {/* Temperatures — admin only */}
+                  {isAdmin && stats.temps?.cpu !== null && stats.temps?.cpu !== undefined && (
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-2">Temperatury</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="glass rounded-xl p-3">
+                          <p className="text-[10px] text-[var(--text-muted)] mb-0.5">CPU</p>
+                          <p className={`text-sm font-semibold ${
+                            stats.temps.cpu > 80 ? 'text-red-400' :
+                            stats.temps.cpu > 60 ? 'text-yellow-400' :
+                            'text-green-400'
+                          }`}>
+                            {stats.temps.cpu}°C
+                          </p>
+                        </div>
+                        {stats.temps.max !== null && stats.temps.max !== stats.temps.cpu && (
+                          <div className="glass rounded-xl p-3">
+                            <p className="text-[10px] text-[var(--text-muted)] mb-0.5">Max</p>
+                            <p className={`text-sm font-semibold ${
+                              stats.temps.max > 80 ? 'text-red-400' :
+                              stats.temps.max > 60 ? 'text-yellow-400' :
+                              'text-green-400'
+                            }`}>
+                              {stats.temps.max}°C
+                            </p>
+                          </div>
+                        )}
+                        {stats.temps.cores.length > 0 && stats.temps.cores.map((t, i) => (
+                          <div key={i} className="glass rounded-xl p-2">
+                            <p className="text-[10px] text-[var(--text-muted)] mb-0.5">Core {i}</p>
+                            <p className={`text-xs font-semibold ${
+                              t > 80 ? 'text-red-400' : t > 60 ? 'text-yellow-400' : 'text-green-400'
+                            }`}>{t}°C</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
