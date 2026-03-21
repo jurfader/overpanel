@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcrypt'
 import { z } from 'zod'
 import { prisma } from '@overpanel/db'
-import { adminOnly, getRequestUser } from '../middleware/auth.js'
+import { authMiddleware, adminOnly, getRequestUser } from '../middleware/auth.js'
 
 export async function usersRoutes(fastify: FastifyInstance) {
   // GET /api/users — lista (tylko admin)
@@ -43,7 +43,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
   })
 
   // PATCH /api/users/:id — edytuj (admin lub właściciel)
-  fastify.patch('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.patch('/:id', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const caller = getRequestUser(request)
 

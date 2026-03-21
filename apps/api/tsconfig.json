@@ -5,7 +5,10 @@
     "moduleResolution": "NodeNext",
     "outDir": "./dist",
     "rootDir": "./src",
-    "lib": ["ES2022"]
+    "lib": ["ES2022"],
+    "exactOptionalPropertyTypes": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "skipLibCheck": true
   },
   "include": ["src"]
 }

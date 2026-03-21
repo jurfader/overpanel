@@ -80,9 +80,9 @@ export async function listFtpUsers(): Promise<{ username: string; homeDir: strin
     const parts = trimmed.split(/\s+/)
     if (parts.length < 2) continue
 
-    const username = parts[0]
+    const username = parts[0]!
     // Remove trailing "(./)" annotation if present
-    let homeDir = parts[1].replace(/\(.*\)$/, '').trim()
+    let homeDir = parts[1]!.replace(/\(.*\)$/, '').trim()
     if (!homeDir) continue
 
     users.push({ username, homeDir })

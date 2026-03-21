@@ -427,7 +427,7 @@ export async function filesRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ success: false, error: 'Path not found' })
     }
 
-    await run(`chmod ${body.mode} ${esc(resolvedPath)}`)
+    await run(`chmod ${body.mode} ${JSON.stringify(resolvedPath)}`)
 
     return reply.send({ success: true, data: null })
   })

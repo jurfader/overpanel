@@ -172,10 +172,12 @@ export async function wordpressRoutes(fastify: FastifyInstance) {
             where: { id: site.id },
             data: { hasWordpress: true, wpVersion: result.version },
           })
-          await prisma.database.update({
-            where: { id: db.id },
-            data: { siteId: site.id },
-          })
+          if (db?.id) {
+            await prisma.database.update({
+              where: { id: db.id },
+              data: { siteId: site.id },
+            })
+          }
           await prisma.auditLog.create({
             data: {
               userId: caller.id,
