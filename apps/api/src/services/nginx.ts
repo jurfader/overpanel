@@ -174,7 +174,7 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: Ov
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_read_timeout 60s;
         client_max_body_size 50M;
     }
@@ -188,7 +188,7 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: Ov
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_cache_bypass $http_upgrade;
     }
 
