@@ -66,7 +66,7 @@ function PhpSettingsModal({ siteId, siteDomain, onClose }: { siteId: string; sit
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="glass relative z-10 rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4">
+      <div className="relative z-10 rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4 bg-[#0A0A0F] shadow-2xl">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Ustawienia PHP — {siteDomain}</h2>
         {loading ? (
           <p className="text-sm text-[var(--text-muted)]">Ładowanie...</p>
@@ -75,7 +75,7 @@ function PhpSettingsModal({ siteId, siteDomain, onClose }: { siteId: string; sit
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1.5">Wersja PHP</label>
               <select
-                className="input w-full"
+                className="w-full h-9 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]/40"
                 value={settings.phpVersion}
                 onChange={e => setSettings(s => s ? { ...s, phpVersion: e.target.value } : s)}
               >
@@ -92,7 +92,7 @@ function PhpSettingsModal({ siteId, siteDomain, onClose }: { siteId: string; sit
               <div key={key}>
                 <label className="block text-xs text-[var(--text-muted)] mb-1.5">{label}</label>
                 <input
-                  className="input w-full"
+                  className="w-full h-9 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]/40"
                   value={(settings as any)[key]}
                   onChange={e => setSettings(s => s ? { ...s, [key]: e.target.value } : s)}
                   placeholder={placeholder}
@@ -103,7 +103,7 @@ function PhpSettingsModal({ siteId, siteDomain, onClose }: { siteId: string; sit
               <label className="block text-xs text-[var(--text-muted)] mb-1.5">Max Execution Time (s)</label>
               <input
                 type="number"
-                className="input w-full"
+                className="w-full h-9 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]/40"
                 value={settings.maxExecutionTime}
                 onChange={e => setSettings(s => s ? { ...s, maxExecutionTime: parseInt(e.target.value) || 60 } : s)}
               />
@@ -207,7 +207,7 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1">
           {(site.siteType === 'php' || !site.siteType) && (
             <button
               onClick={() => setPhpModal(true)}
