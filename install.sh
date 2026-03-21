@@ -781,6 +781,72 @@ certbot --nginx \
 }
 
 # ==============================================================================
+# Cloudflare Tunnel — dodanie domeny panelu
+# ==============================================================================
+if [[ -n "${CF_API_TOKEN}" ]] && command -v cloudflared &>/dev/null; then
+    log_info "Wykrywanie konfiguracji tunelu Cloudflare..."
+
+    # Find config file — common locations
+    CF_CONFIG=""
+    for candidate in \
+        /etc/cloudflared/config.yml \
+        /root/.cloudflared/config.yml \
+        /home/cloudflared/.cloudflared/config.yml \
+        /usr/local/etc/cloudflared/config.yml; do
+        if [[ -f "$candidate" ]]; then
+            CF_CONFIG="$candidate"
+            break
+        fi
+    done
+
+    # Also check running cloudflared process for --config flag
+    if [[ -z "$CF_CONFIG" ]]; then
+        CF_CONFIG=$(ps aux | grep cloudflared | grep -oP '(?<=--config )\S+' | head -1 || true)
+    fi
+
+    if [[ -n "$CF_CONFIG" ]]; then
+        log_ok "Znaleziono config tunelu: ${CF_CONFIG}"
+
+        # Check if panel domain is already configured
+        if grep -q "${PANEL_DOMAIN}" "$CF_CONFIG" 2>/dev/null; then
+            log_warn "Domena ${PANEL_DOMAIN} już istnieje w konfiguracji tunelu"
+        else
+            # Build ingress entry for panel
+            PANEL_INGRESS="  - hostname: ${PANEL_DOMAIN}\n    service: http://localhost:3333"
+
+            # Insert before the catch-all line (last ingress rule)
+            if grep -q "http_status:404\|http_status: 404" "$CF_CONFIG"; then
+                # Insert before the catch-all
+                sed -i "s|.*http_status:404.*|${PANEL_INGRESS}\n  - service: http_status:404|" "$CF_CONFIG"
+            elif grep -q "^ingress:" "$CF_CONFIG"; then
+                # Append to ingress section before EOF
+                echo -e "${PANEL_INGRESS}" >> "$CF_CONFIG"
+            else
+                # No ingress section — append full ingress block
+                printf '\ningress:\n%s\n  - service: http_status:404\n' "$(echo -e "${PANEL_INGRESS}")" >> "$CF_CONFIG"
+            fi
+
+            log_ok "Dodano ${PANEL_DOMAIN} do konfiguracji tunelu"
+
+            # Restart cloudflared to apply
+            systemctl restart cloudflared 2>/dev/null \
+                || systemctl restart cloudflared.service 2>/dev/null \
+                || true
+            sleep 2
+
+            if systemctl is-active --quiet cloudflared 2>/dev/null; then
+                log_ok "Cloudflare Tunnel zrestartowany"
+            else
+                log_warn "Cloudflare Tunnel nie został zrestartowany — zrób to ręcznie: systemctl restart cloudflared"
+            fi
+        fi
+    else
+        log_warn "Nie znaleziono konfiguracji tunelu cloudflared — pomiń lub skonfiguruj ręcznie"
+        log_info "Oczekiwane lokalizacje: /etc/cloudflared/config.yml lub ~/.cloudflared/config.yml"
+    fi
+fi
+
+# ==============================================================================
 # STEP 15: Create systemd services
 # ==============================================================================
 log_step "Konfiguracja usług systemd"
