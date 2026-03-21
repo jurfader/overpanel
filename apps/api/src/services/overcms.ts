@@ -145,19 +145,19 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
 # Domain: ${domain}
 
 # Database
-DATABASE_URL=postgresql://overcms:${pgPassword}@overcms-pg-${containerPrefix}:5432/overcms
+DATABASE_URL=postgresql://overcms:${pgPassword}@postgres:5432/overcms
 POSTGRES_USER=overcms
 POSTGRES_PASSWORD=${pgPassword}
 POSTGRES_DB=overcms
 
 # Redis
-REDIS_URL=redis://overcms-redis-${containerPrefix}:6379
+REDIS_URL=redis://redis:6379
 REDIS_PASSWORD=${redisPassword}
 
 # S3 / MinIO
 MINIO_ROOT_USER=overcms-minio
 MINIO_ROOT_PASSWORD=${minioPassword}
-S3_ENDPOINT=http://overcms-minio-${containerPrefix}:9000
+S3_ENDPOINT=http://minio:9000
 S3_REGION=auto
 S3_ACCESS_KEY_ID=overcms-minio
 S3_SECRET_ACCESS_KEY=${minioPassword}
@@ -166,7 +166,7 @@ S3_PUBLIC_URL=https://${domain}/storage
 
 # API
 API_PORT=3000
-API_URL=http://overcms-api-${containerPrefix}:3000
+API_URL=http://api:3000
 API_DOMAIN=${domain}
 BETTER_AUTH_SECRET=${authSecret}
 BETTER_AUTH_URL=https://${domain}
