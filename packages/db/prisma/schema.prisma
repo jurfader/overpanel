@@ -32,6 +32,8 @@ model User {
   auditLogs        AuditLog[]
   cfTokens         CloudflareToken[]
   dockerContainers DockerContainer[]
+  mailDomains      MailDomain[]
+  mailboxes        Mailbox[]
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────
@@ -62,6 +64,7 @@ model Site {
   backups      Backup[]
   ftpUsers     FtpUser[]
   logs         SiteLog[]
+  mailDomain   MailDomain?
 }
 
 // ─── Databases ────────────────────────────────────────────────────────────────
@@ -220,4 +223,45 @@ model DockerContainer {
 
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Mail Domains ────────────────────────────────────────────────────────────
+
+model MailDomain {
+  id              String    @id @default(cuid())
+  domain          String    @unique
+  isActive        Boolean   @default(true)
+  dkimSelector    String    @default("overpanel")
+  dkimPublicKey   String?
+  mxConfigured    Boolean   @default(false)
+  spfConfigured   Boolean   @default(false)
+  dkimConfigured  Boolean   @default(false)
+  dmarcConfigured Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  siteId    String?
+  site      Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  mailboxes Mailbox[]
+}
+
+// ─── Mailboxes ───────────────────────────────────────────────────────────────
+
+model Mailbox {
+  id          String   @id @default(cuid())
+  address     String   @unique
+  localPart   String
+  displayName String?
+  quotaMb     Int      @default(500)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  domainId String
+  domain   MailDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

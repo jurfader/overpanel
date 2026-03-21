@@ -71,6 +71,12 @@ const SETTING_KEYS = [
   'backup_time',
   'backup_retention',
   'backup_retention_days',
+  // Mail / Stalwart
+  'mail_enabled',
+  'mail_stalwart_url',
+  'mail_stalwart_token',
+  'mail_roundcube_url',
+  'mail_default_quota_mb',
 ] as const
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -132,6 +138,12 @@ export async function settingsRoutes(fastify: FastifyInstance) {
       backup_schedule: z.enum(['daily', 'weekly', 'monthly', 'disabled']).optional(),
       backup_time: z.string().regex(/^\d{2}:\d{2}$/, 'backup_time must be HH:MM').optional(),
       backup_retention: z.string().regex(/^\d+$/, 'backup_retention must be numeric').optional(),
+      // Mail / Stalwart
+      mail_enabled: z.enum(['true', 'false']).optional(),
+      mail_stalwart_url: z.string().optional(),
+      mail_stalwart_token: z.string().optional(),
+      mail_roundcube_url: z.string().optional(),
+      mail_default_quota_mb: z.string().regex(/^\d+$/, 'mail_default_quota_mb must be numeric').optional(),
     })
 
     const parsed = bodySchema.safeParse(request.body)

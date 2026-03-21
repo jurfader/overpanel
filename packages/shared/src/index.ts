@@ -4,7 +4,7 @@ export type UserRole = 'admin' | 'client'
 // Permissions
 export const PANEL_SECTIONS = [
   'dashboard', 'sites', 'databases', 'ssl', 'wordpress',
-  'dns', 'docker', 'files', 'ftp', 'cron', 'backups', 'logs',
+  'dns', 'docker', 'files', 'ftp', 'cron', 'backups', 'logs', 'mail',
 ] as const
 export type PanelSection = typeof PANEL_SECTIONS[number]
 

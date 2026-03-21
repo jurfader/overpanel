@@ -17,6 +17,7 @@ const PATH_TO_SECTION: Record<string, string> = {
   '/cron': 'cron',
   '/backups': 'backups',
   '/logs': 'logs',
+  '/mail': 'mail',
 }
 
 // Admin-only pages — clients never see these

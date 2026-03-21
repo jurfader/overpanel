@@ -14,6 +14,7 @@ import {
   Clock,
   HardDrive,
   Terminal,
+  Mail,
   Network,
   Settings,
   LogOut,
@@ -43,6 +44,7 @@ const navItems: NavGroup[] = [
     group: 'Narzędzia',
     items: [
       { href: '/dns', label: 'DNS / Cloudflare', icon: Cloud, section: 'dns' },
+      { href: '/mail', label: 'Poczta e-mail', icon: Mail, section: 'mail' },
       { href: '/docker', label: 'Docker', icon: Container, section: 'docker' },
       { href: '/files', label: 'Menedżer plików', icon: FolderOpen, needsSite: true, section: 'files' },
       { href: '/ftp', label: 'FTP / SFTP', icon: UserCog, needsSite: true, section: 'ftp' },
