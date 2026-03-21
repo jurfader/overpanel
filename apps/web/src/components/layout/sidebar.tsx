@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -72,6 +72,7 @@ const navItems: NavGroup[] = [
 
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [updateCount, setUpdateCount] = useState(0)
   const pathname = usePathname()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
@@ -80,6 +81,26 @@ export function Sidebar() {
 
   // Refresh user data (permissions, siteCount) on mount
   useState(() => { fetchMe() })
+
+  // Check for updates periodically (admin only)
+  useEffect(() => {
+    if (user?.role !== 'admin') return
+    const check = () => {
+      fetch('/api/system/update-check', { credentials: 'include' })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.data?.hasUpdates) {
+            setUpdateCount(d.data.commits?.length ?? 0)
+          } else {
+            setUpdateCount(0)
+          }
+        })
+        .catch(() => {})
+    }
+    check()
+    const interval = setInterval(check, 5 * 60 * 1000) // co 5 minut
+    return () => clearInterval(interval)
+  }, [user?.role])
 
   const handleLogout = async () => {
     await logout()
@@ -173,6 +194,11 @@ export function Sidebar() {
                           )}
                         />
                         <span className="flex-1">{label}</span>
+                        {href === '/update' && updateCount > 0 && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold text-white rounded-md bg-gradient-to-r from-[#E91E8C] to-[#9B26D9] min-w-[20px] text-center">
+                            {updateCount}
+                          </span>
+                        )}
                         {active && <ChevronRight className="w-3 h-3 text-[var(--primary)] opacity-60" />}
                       </Link>
                     </li>
