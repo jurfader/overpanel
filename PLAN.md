@@ -315,3 +315,4 @@
 ---
 
 *Ostatnia aktualizacja: 2026-03-21*
+🔑 Your administrator account is 'admin' with password 'yKKFoRBKtN'.
