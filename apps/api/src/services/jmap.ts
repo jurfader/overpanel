@@ -38,7 +38,7 @@ export async function jmapSession(email: string, password: string): Promise<Jmap
     '-X', 'GET',
     '-H', `"Authorization: Basic ${auth}"`,
     '-H', '"Accept: application/json"',
-    `"${baseUrl}/.well-known/jmap"`,
+    `"${baseUrl}/jmap/session"`,
   ].join(' ')
 
   const result = await run(cmd)
@@ -107,7 +107,7 @@ export async function jmapRequest(
     '-H', `"Authorization: Basic ${auth}"`,
     '-H', '"Content-Type: application/json"',
     '-d', JSON.stringify(JSON.stringify(payload)),
-    `"${baseUrl}/jmap"`,
+    `"${baseUrl}/jmap/"`,
   ].join(' ')
 
   const result = await run(cmd)
