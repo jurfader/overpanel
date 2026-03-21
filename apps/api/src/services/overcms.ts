@@ -267,9 +267,9 @@ COMPEOF`)
     await runLong(`cd ${installDir}/app && NODE_ENV=development pnpm install 2>&1 && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm run db:push`, 300_000)
   })
 
-  // 8. Seed admin user inside the container (has compiled app + access to DB via service name)
+  // 8. Seed admin user from host (source .ts files not in prod container)
   await logStep('Tworzenie konta admina', async () => {
-    await runLong(`${dc} exec -T -e ADMIN_EMAIL=${adminEmail} -e ADMIN_PASSWORD=${adminPassword} api npx tsx packages/core/src/db/seed.ts`)
+    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms ADMIN_EMAIL=${adminEmail} ADMIN_PASSWORD=${adminPassword} pnpm exec tsx packages/core/src/db/seed.ts`)
   })
 
   // 8. Store port mapping
