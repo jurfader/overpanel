@@ -262,12 +262,8 @@ COMPEOF`)
   })
 
   // 7. Run database migration from host (source schema .ts files not in prod container)
-  await logStep('Instalacja narzędzi migracji', async () => {
-    await runLong(`cd ${installDir}/app && npm install --no-save drizzle-kit 2>&1`)
-  })
-
   await logStep('Migracja bazy danych', async () => {
-    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms npx drizzle-kit push --force`)
+    await runLong(`cd ${installDir}/app && pnpm add -D drizzle-kit 2>&1 && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm exec drizzle-kit push --force`)
   })
 
   // 8. Seed admin user inside the container (has compiled app + access to DB via service name)
