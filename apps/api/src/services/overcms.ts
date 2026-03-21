@@ -268,7 +268,7 @@ COMPEOF`)
   })
 
   await logStep('Migracja bazy danych (drizzle-kit push)', async () => {
-    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm exec drizzle-kit push`)
+    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm run db:push`)
   })
 
   // 8. Seed admin user inside the container (has compiled app + access to DB via service name)
