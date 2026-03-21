@@ -42,9 +42,9 @@ export function startStatsEmitter(io: SocketServer) {
       const stats = {
         cpu: Math.round(cpuLoad.currentLoad * 10) / 10,
         ram: {
-          used: mem.used,
+          used: mem.active,
           total: mem.total,
-          percent: Math.round((mem.used / mem.total) * 1000) / 10,
+          percent: Math.round((mem.active / mem.total) * 1000) / 10,
         },
         disk: mainDisk
           ? {
