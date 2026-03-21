@@ -1,0 +1,39 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+<style>
+/* ── Message part view (attachment preview) ── */
+body {
+    background: #0E0E18 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+#messagepartcontainer {
+    padding: 20px !important;
+    background: #0E0E18 !important;
+}
+.message-htmlpart, .message-part {
+    background: #0E0E18 !important;
+    color: #d0d0d0 !important;
+    line-height: 1.6 !important;
+    font-size: 14px !important;
+}
+/* Image attachments */
+#messagepartcontainer img {
+    max-width: 100% !important;
+    height: auto !important;
+    border-radius: 12px !important;
+}
+</style>
+</head>
+<body class="task-mail action-viewpart">
+
+<div id="messagepartcontainer">
+    <roundcube:object name="messageObjects" id="messageobjects" />
+    <roundcube:object name="messagePart" id="messagepart" />
+</div>
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

@@ -1,0 +1,116 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+<style>
+body { background: #0E0E18 !important; }
+
+.folder-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.folder-header-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.folder-header-icon svg { width: 18px; height: 18px; fill: white; }
+
+.folder-form {
+    padding: 20px 24px;
+}
+.folder-form fieldset {
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 14px !important;
+    padding: 18px 20px !important;
+    margin-bottom: 16px !important;
+    background: rgba(255,255,255,0.02) !important;
+}
+.folder-form legend {
+    color: #E91E8C !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    padding: 0 8px !important;
+}
+.folder-form table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+}
+.folder-form td {
+    padding: 8px 6px !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+    color: #bbb !important;
+    font-size: 13px !important;
+}
+.folder-form td.title {
+    color: #999 !important;
+    font-weight: 500 !important;
+    width: 140px !important;
+}
+.folder-form input[type="text"],
+.folder-form select {
+    width: 100% !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 10px !important;
+    color: #e0e0e0 !important;
+    padding: 9px 14px !important;
+    font-size: 13px !important;
+}
+.folder-form input:focus,
+.folder-form select:focus {
+    border-color: rgba(233,30,140,0.4) !important;
+    box-shadow: 0 0 0 3px rgba(233,30,140,0.06) !important;
+    outline: none !important;
+}
+
+.formbuttons {
+    padding: 16px 24px !important;
+    display: flex !important;
+    gap: 10px !important;
+    border-top: 1px solid rgba(255,255,255,0.06) !important;
+}
+</style>
+</head>
+<body class="task-settings action-edit-folder">
+
+<roundcube:object name="message" id="message" />
+
+<div class="folder-header">
+    <div class="folder-header-icon op-gradient">
+        <svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+    </div>
+    <div>
+        <h2 style="font-size:18px;font-weight:700;color:#f0f0f0;margin:0;">
+            <roundcube:object name="pagetitle" />
+        </h2>
+        <p style="font-size:12px;color:#555;margin-top:2px;">
+            <roundcube:label name="folderedit" />
+        </p>
+    </div>
+</div>
+
+<div class="folder-form">
+    <roundcube:object name="folderdetails" id="folder-details" />
+</div>
+
+<div class="formbuttons">
+    <roundcube:button command="save" type="input" class="btn-primary mainaction"
+        label="save" />
+    <roundcube:button command="delete-folder" type="input" class="btn-danger"
+        label="delete" />
+</div>
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

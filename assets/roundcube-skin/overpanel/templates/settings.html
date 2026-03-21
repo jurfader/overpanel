@@ -1,0 +1,193 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+<style>
+/* ── Settings-specific styles ── */
+
+/* Settings navigation (left panel) */
+.settingsnav, #sections-table {
+    background: transparent !important;
+}
+.settingsnav li, #sections-table tr {
+    border: none !important;
+}
+.settingsnav li a, #sections-table tr td a {
+    color: #888 !important;
+    border-radius: 10px !important;
+    margin: 1px 6px !important;
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    transition: all 0.15s !important;
+}
+.settingsnav li a:hover,
+#sections-table tr td a:hover {
+    background: rgba(255,255,255,0.04) !important;
+    color: #ccc !important;
+}
+.settingsnav li.selected a,
+.settingsnav li a.selected,
+#sections-table tr.selected td a {
+    background: linear-gradient(135deg, rgba(233,30,140,0.06), rgba(155,38,217,0.03)) !important;
+    border: 1px solid rgba(233,30,140,0.12) !important;
+    color: #f0f0f0 !important;
+}
+.settingsnav li.selected a::before,
+#sections-table tr.selected td a::before {
+    color: #E91E8C !important;
+}
+
+/* Settings form content */
+.formcontent {
+    background: transparent !important;
+    color: #ccc !important;
+}
+.formcontent fieldset {
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 14px !important;
+    padding: 20px !important;
+    margin-bottom: 16px !important;
+    background: rgba(255,255,255,0.02) !important;
+}
+.formcontent legend {
+    color: #E91E8C !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    padding: 0 10px !important;
+}
+.formcontent table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+}
+.formcontent table td, .formcontent table th {
+    border: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+    padding: 10px 8px !important;
+    color: #bbb !important;
+    font-size: 13px !important;
+    vertical-align: middle !important;
+}
+.formcontent table td.title {
+    font-size: 12px !important;
+    color: #999 !important;
+    font-weight: 500 !important;
+    width: 200px !important;
+}
+.formcontent .hint {
+    font-size: 11px !important;
+    color: #444 !important;
+    margin-top: 4px !important;
+}
+
+/* Folder management list */
+#subscription-table {
+    background: transparent !important;
+}
+#subscription-table tr {
+    border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+}
+#subscription-table tr td {
+    background: transparent !important;
+    color: #bbb !important;
+    padding: 8px 12px !important;
+}
+#subscription-table tr:hover td {
+    background: rgba(255,255,255,0.02) !important;
+}
+
+/* Identity list */
+.identitieslist tr td {
+    padding: 10px 14px !important;
+    color: #bbb !important;
+}
+.identitieslist tr.selected td {
+    background: rgba(233,30,140,0.06) !important;
+    color: #f0f0f0 !important;
+}
+</style>
+</head>
+<body class="task-settings layout-widescreen">
+
+<div id="layout" class="widescreen">
+
+    <!-- ═══ TASKMENU ═══ -->
+    <div id="layout-menu" class="menu" role="navigation">
+        <div class="op-brand">
+            <div class="op-brand-icon op-gradient">
+                <svg viewBox="0 0 24 24"><path d="M12 2L8.5 8.5H2L7 13l-2 7 7-4.5L19 20l-2-7 5-4.5h-6.5L12 2z"/></svg>
+            </div>
+            <div>
+                <span class="op-brand-text op-gradient-text">OVERPANEL</span>
+                <span class="op-brand-sub">Webmail</span>
+            </div>
+        </div>
+        <roundcube:object name="taskmenu" id="taskmenu" />
+        <div class="op-footer">Powered by OVERMEDIA</div>
+    </div>
+
+    <!-- ═══ SIDEBAR (settings sections) ═══ -->
+    <div id="layout-sidebar" class="sidebar" role="navigation">
+        <div class="header" role="toolbar">
+            <span class="op-page-title">
+                <span class="op-icon op-gradient op-glow">
+                    <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                </span>
+                <roundcube:label name="settings" />
+            </span>
+        </div>
+
+        <div id="sectionslistcontainer" class="scroller">
+            <roundcube:object name="settingslist" id="sections-table"
+                type="ul" class="settingsnav listing iconized" />
+        </div>
+    </div>
+
+    <!-- ═══ LIST (settings sub-sections / folders / identities) ═══ -->
+    <div id="layout-list" class="list" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-sidebar-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <span class="op-page-title">
+                <roundcube:object name="pagetitle" />
+            </span>
+            <roundcube:object name="toolbar" id="settingstoolbar"
+                menu="toolbar-menu" />
+        </div>
+
+        <div id="settings-list" class="scroller">
+            <roundcube:object name="settingslist" id="subscription-table"
+                type="table" class="listing" />
+            <roundcube:object name="identitieslist" id="identities-table"
+                class="listing identitieslist" />
+            <roundcube:object name="responseslist" id="responses-table"
+                class="listing" />
+            <roundcube:object name="foldersubscription" id="foldersubscription"
+                class="listing" />
+        </div>
+    </div>
+
+    <!-- ═══ CONTENT (settings form) ═══ -->
+    <div id="layout-content" class="content" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-content-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <roundcube:object name="toolbar" id="settingsactionbar"
+                menu="settings-menu" />
+        </div>
+
+        <div id="settingscontframe" class="scroller">
+            <roundcube:object name="settingscontentframe" id="settingscontframe" />
+        </div>
+    </div>
+
+</div>
+
+<!-- Popup menus -->
+<roundcube:object name="popupmenus" />
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

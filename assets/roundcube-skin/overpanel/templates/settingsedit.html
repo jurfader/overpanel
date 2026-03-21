@@ -1,0 +1,145 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+<style>
+/* ── Settings edit / preferences form (loaded in content pane) ── */
+body {
+    background: #0E0E18 !important;
+}
+
+/* Preferences form styling */
+.propform, .preferences-table, .formcontent {
+    background: transparent !important;
+    color: #ccc !important;
+    padding: 16px !important;
+}
+
+.propform fieldset, .formcontent fieldset {
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 14px !important;
+    padding: 18px 20px !important;
+    margin-bottom: 16px !important;
+    background: rgba(255,255,255,0.02) !important;
+}
+.propform legend, .formcontent legend {
+    color: #E91E8C !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    padding: 0 8px !important;
+}
+
+.propform table, .formcontent table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+}
+.propform td, .propform th,
+.formcontent td, .formcontent th {
+    border: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+    padding: 10px 8px !important;
+    color: #bbb !important;
+    font-size: 13px !important;
+    vertical-align: middle !important;
+}
+.propform td.title, .formcontent td.title {
+    font-size: 12px !important;
+    color: #999 !important;
+    font-weight: 500 !important;
+    width: 200px !important;
+}
+
+.propform input[type="text"],
+.propform input[type="password"],
+.propform input[type="email"],
+.propform input[type="number"],
+.propform textarea,
+.propform select {
+    width: 100% !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 10px !important;
+    color: #e0e0e0 !important;
+    padding: 9px 14px !important;
+    font-size: 13px !important;
+    transition: all 0.2s !important;
+}
+.propform input:focus,
+.propform textarea:focus,
+.propform select:focus {
+    border-color: rgba(233,30,140,0.4) !important;
+    box-shadow: 0 0 0 3px rgba(233,30,140,0.06) !important;
+    outline: none !important;
+}
+
+.propform .hint, .formcontent .hint {
+    font-size: 11px !important;
+    color: #444 !important;
+    margin-top: 4px !important;
+}
+
+/* Form action buttons */
+.formbuttons {
+    padding: 16px 20px !important;
+    display: flex !important;
+    gap: 10px !important;
+    border-top: 1px solid rgba(255,255,255,0.06) !important;
+    margin-top: 12px !important;
+    background: rgba(10,10,15,0.5) !important;
+}
+
+/* Identity form */
+#identity-details { padding: 16px !important; }
+#identity-details fieldset {
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 14px !important;
+    padding: 18px 20px !important;
+    background: rgba(255,255,255,0.02) !important;
+    margin-bottom: 16px !important;
+}
+
+/* Folder management */
+.folder-info {
+    padding: 16px !important;
+}
+.folder-info fieldset {
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 14px !important;
+    padding: 18px 20px !important;
+    background: rgba(255,255,255,0.02) !important;
+}
+</style>
+</head>
+<body class="task-settings action-edit">
+
+<roundcube:object name="message" id="message" />
+
+<div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);">
+    <h2 style="font-size:18px;font-weight:700;color:#f0f0f0;margin:0 0 4px 0;">
+        <roundcube:object name="pagetitle" />
+    </h2>
+    <p style="font-size:12px;color:#555;margin:0;">
+        <roundcube:label name="preferences" />
+    </p>
+</div>
+
+<roundcube:object name="prefsframe" id="preferences-details"
+    class="formcontent" />
+
+<roundcube:object name="sectionlist" id="preferences-sections"
+    class="settingsnav listing iconized" />
+
+<roundcube:object name="prefsform" id="prefs-form"
+    class="propform" />
+
+<roundcube:object name="identityform" id="identity-details"
+    class="propform" />
+
+<roundcube:object name="folderdetails" id="folder-details"
+    class="folder-info propform" />
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

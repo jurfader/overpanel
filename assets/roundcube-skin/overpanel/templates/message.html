@@ -1,0 +1,104 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+</head>
+<body class="task-mail action-show layout-widescreen">
+
+<div id="layout" class="widescreen">
+
+    <!-- ═══ TASKMENU ═══ -->
+    <div id="layout-menu" class="menu" role="navigation">
+        <div class="op-brand">
+            <div class="op-brand-icon op-gradient">
+                <svg viewBox="0 0 24 24"><path d="M12 2L8.5 8.5H2L7 13l-2 7 7-4.5L19 20l-2-7 5-4.5h-6.5L12 2z"/></svg>
+            </div>
+            <div>
+                <span class="op-brand-text op-gradient-text">OVERPANEL</span>
+                <span class="op-brand-sub">Webmail</span>
+            </div>
+        </div>
+        <roundcube:object name="taskmenu" id="taskmenu" />
+        <div class="op-footer">Powered by OVERMEDIA</div>
+    </div>
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <div id="layout-sidebar" class="sidebar" role="navigation">
+        <div class="header" role="toolbar">
+            <a class="button icon back-list-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <span class="op-page-title">
+                <roundcube:label name="mailbox" />
+            </span>
+            <roundcube:object name="searchform" id="quicksearchbar" wrapper="searchbar"
+                arialabel="searchform" label-options="searchmod" />
+        </div>
+
+        <div id="mailboxcontainer" class="scroller withfooter">
+            <roundcube:object name="mailboxlist" id="mailboxlist"
+                type="ul" folder_selector="a" unreadwrap="%s" />
+        </div>
+
+        <div class="footer" role="contentinfo">
+            <roundcube:object name="quotadisplay" id="quotadisplay"
+                class="quota-widget" display="text" />
+        </div>
+    </div>
+
+    <!-- ═══ LIST ═══ -->
+    <div id="layout-list" class="list" role="main">
+        <div class="header" role="toolbar">
+            <span class="op-page-title">
+                <span class="op-icon op-gradient op-glow">
+                    <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                </span>
+                <roundcube:object name="mailboxname" />
+            </span>
+            <roundcube:object name="toolbar" id="mailtoolbar"
+                menu="toolbar-menu" />
+        </div>
+
+        <div id="messagelistcontainer" class="scroller withfooter">
+            <roundcube:object name="messages" id="messagelist"
+                class="messagelist sortheader fixedcopy" />
+        </div>
+
+        <div class="footer" role="contentinfo">
+            <roundcube:object name="countdisplay" id="countdisplay"
+                label="list" />
+            <roundcube:object name="mailboxlist" id="listnav"
+                type="pagenav" />
+        </div>
+    </div>
+
+    <!-- ═══ CONTENT (message view) ═══ -->
+    <div id="layout-content" class="content selected" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-content-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <roundcube:object name="toolbar" id="messagetoolbar"
+                menu="message-menu" />
+        </div>
+
+        <div class="scroller">
+            <!-- Message header area -->
+            <div id="message-header">
+                <roundcube:object name="messageHeaders" id="messageheaderbox"
+                    class="messageheaderbox" />
+            </div>
+
+            <!-- Message body -->
+            <div id="message-content">
+                <roundcube:object name="messageObjects" id="messageobjects" />
+                <roundcube:object name="messageBody" id="messagebody"
+                    class="message-htmlpart" />
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Popup menus -->
+<roundcube:object name="popupmenus" />
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

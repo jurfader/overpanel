@@ -1,0 +1,95 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+</head>
+<body class="task-mail action-search layout-widescreen">
+
+<div id="layout" class="widescreen">
+
+    <!-- ═══ TASKMENU ═══ -->
+    <div id="layout-menu" class="menu" role="navigation">
+        <div class="op-brand">
+            <div class="op-brand-icon op-gradient">
+                <svg viewBox="0 0 24 24"><path d="M12 2L8.5 8.5H2L7 13l-2 7 7-4.5L19 20l-2-7 5-4.5h-6.5L12 2z"/></svg>
+            </div>
+            <div>
+                <span class="op-brand-text op-gradient-text">OVERPANEL</span>
+                <span class="op-brand-sub">Webmail</span>
+            </div>
+        </div>
+        <roundcube:object name="taskmenu" id="taskmenu" />
+        <div class="op-footer">Powered by OVERMEDIA</div>
+    </div>
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <div id="layout-sidebar" class="sidebar" role="navigation">
+        <div class="header" role="toolbar">
+            <a class="button icon back-list-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <span class="op-page-title">
+                <roundcube:label name="mailbox" />
+            </span>
+            <roundcube:object name="searchform" id="quicksearchbar" wrapper="searchbar"
+                arialabel="searchform" label-options="searchmod" />
+        </div>
+
+        <div id="mailboxcontainer" class="scroller withfooter">
+            <roundcube:object name="mailboxlist" id="mailboxlist"
+                type="ul" folder_selector="a" unreadwrap="%s" />
+        </div>
+
+        <div class="footer" role="contentinfo">
+            <roundcube:object name="quotadisplay" id="quotadisplay"
+                class="quota-widget" display="text" />
+        </div>
+    </div>
+
+    <!-- ═══ LIST (search results) ═══ -->
+    <div id="layout-list" class="list selected" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-sidebar-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <span class="op-page-title">
+                <span class="op-icon op-gradient op-glow">
+                    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                </span>
+                <roundcube:label name="searchresult" />
+            </span>
+            <roundcube:object name="toolbar" id="mailtoolbar"
+                menu="toolbar-menu" />
+        </div>
+
+        <div id="messagelistcontainer" class="scroller withfooter">
+            <roundcube:object name="messages" id="messagelist"
+                class="messagelist sortheader fixedcopy" />
+        </div>
+
+        <div class="footer" role="contentinfo">
+            <roundcube:object name="countdisplay" id="countdisplay"
+                label="list" />
+            <roundcube:object name="mailboxlist" id="listnav"
+                type="pagenav" />
+        </div>
+    </div>
+
+    <!-- ═══ CONTENT ═══ -->
+    <div id="layout-content" class="content" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-content-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <roundcube:object name="toolbar" id="messagetoolbar"
+                menu="message-menu" />
+        </div>
+
+        <div id="messagecontframe" class="scroller">
+            <roundcube:object name="messagecontentframe" id="messagecontframe"
+                src="/watermark.html" />
+        </div>
+    </div>
+
+</div>
+
+<!-- Popup menus -->
+<roundcube:object name="popupmenus" />
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

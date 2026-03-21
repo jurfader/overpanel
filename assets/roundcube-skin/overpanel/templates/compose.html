@@ -1,0 +1,172 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+<style>
+/* ── Compose-specific styles ── */
+#compose-content {
+    background: #0E0E18 !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Compose header fields */
+#compose_headerfields {
+    background: rgba(10,10,15,0.95) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+    padding: 12px 16px !important;
+}
+#compose_headerfields table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+}
+#compose_headerfields td {
+    padding: 4px 6px !important;
+    border: none !important;
+}
+#compose_headerfields td.title,
+#compose_headerfields label {
+    font-size: 11px !important;
+    color: #555 !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    white-space: nowrap !important;
+    width: 60px !important;
+    vertical-align: middle !important;
+}
+#compose_headerfields input,
+#compose_headerfields textarea,
+#compose_headerfields select {
+    width: 100% !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 10px !important;
+    color: #e0e0e0 !important;
+    padding: 8px 14px !important;
+    font-size: 13px !important;
+}
+#compose_headerfields input:focus,
+#compose_headerfields textarea:focus {
+    border-color: rgba(233,30,140,0.4) !important;
+    box-shadow: 0 0 0 3px rgba(233,30,140,0.06) !important;
+    outline: none !important;
+}
+/* Subject field bigger */
+#compose-subject {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    padding: 10px 14px !important;
+}
+
+/* Compose body / editor area */
+#composebody, .mce-content-body, #composebodycontainer {
+    background: #0E0E18 !important;
+    color: #d0d0d0 !important;
+    flex: 1 !important;
+}
+#composebodycontainer {
+    padding: 0 !important;
+}
+
+/* Attachment bar */
+#compose-attachments {
+    background: rgba(10,10,15,0.7) !important;
+    border-top: 1px solid rgba(255,255,255,0.06) !important;
+    padding: 8px 16px !important;
+}
+#compose-attachments .attachmentslist li {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 10px !important;
+    padding: 6px 12px !important;
+    margin: 2px 4px 2px 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    color: #bbb !important;
+    font-size: 12px !important;
+}
+#compose-attachments .attachmentslist li a.delete {
+    color: #ef4444 !important;
+}
+
+/* Send button styling */
+.toolbar a.button.send::before { color: #22c55e !important; }
+.toolbar a.button.send:hover { background: rgba(34,197,94,0.08) !important; }
+</style>
+</head>
+<body class="task-mail action-compose layout-widescreen">
+
+<div id="layout" class="widescreen">
+
+    <!-- ═══ TASKMENU ═══ -->
+    <div id="layout-menu" class="menu" role="navigation">
+        <div class="op-brand">
+            <div class="op-brand-icon op-gradient">
+                <svg viewBox="0 0 24 24"><path d="M12 2L8.5 8.5H2L7 13l-2 7 7-4.5L19 20l-2-7 5-4.5h-6.5L12 2z"/></svg>
+            </div>
+            <div>
+                <span class="op-brand-text op-gradient-text">OVERPANEL</span>
+                <span class="op-brand-sub">Webmail</span>
+            </div>
+        </div>
+        <roundcube:object name="taskmenu" id="taskmenu" />
+        <div class="op-footer">Powered by OVERMEDIA</div>
+    </div>
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <div id="layout-sidebar" class="sidebar" role="navigation">
+        <div class="header" role="toolbar">
+            <a class="button icon back-list-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <span class="op-page-title">
+                <roundcube:label name="mailbox" />
+            </span>
+        </div>
+
+        <div id="mailboxcontainer" class="scroller withfooter">
+            <roundcube:object name="mailboxlist" id="mailboxlist"
+                type="ul" folder_selector="a" unreadwrap="%s" />
+        </div>
+
+        <div class="footer" role="contentinfo">
+            <roundcube:object name="quotadisplay" id="quotadisplay"
+                class="quota-widget" display="text" />
+        </div>
+    </div>
+
+    <!-- ═══ CONTENT (compose form) ═══ -->
+    <div id="layout-content" class="content selected" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-content-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <span class="op-page-title">
+                <span class="op-icon op-gradient op-glow">
+                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                </span>
+                <roundcube:label name="compose" />
+            </span>
+            <roundcube:object name="toolbar" id="composetoolbar"
+                menu="compose-menu" />
+        </div>
+
+        <div id="compose-content" class="scroller">
+            <roundcube:object name="composeHeaders" id="compose_headerfields"
+                class="compose-headers" />
+
+            <roundcube:object name="composeAttachmentList" id="compose-attachments"
+                class="compose-attachments" />
+
+            <roundcube:object name="composeBody" id="composebodycontainer"
+                class="compose-body" />
+        </div>
+    </div>
+
+</div>
+
+<!-- Popup menus -->
+<roundcube:object name="popupmenus" />
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

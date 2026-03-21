@@ -1,0 +1,178 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<roundcube:include file="includes/head.html" />
+<style>
+/* ── Contacts-specific styles ── */
+#contactslist {
+    background: transparent !important;
+}
+#contactslist tr {
+    border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+    transition: background 0.1s !important;
+}
+#contactslist tr td {
+    background: transparent !important;
+    color: #bbb !important;
+    padding: 10px 14px !important;
+}
+#contactslist tr:hover td {
+    background: rgba(255,255,255,0.02) !important;
+}
+#contactslist tr.selected td {
+    background: rgba(233,30,140,0.06) !important;
+}
+#contactslist tr.selected td .name {
+    color: #f0f0f0 !important;
+}
+
+/* Contact photo placeholder */
+#contactphoto {
+    width: 80px !important;
+    height: 80px !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, rgba(233,30,140,0.15), rgba(155,38,217,0.1)) !important;
+    border: 2px solid rgba(233,30,140,0.15) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 12px !important;
+}
+
+/* Contact details form */
+.contactfieldgroup {
+    border: none !important;
+    background: transparent !important;
+    margin-bottom: 8px !important;
+}
+.contactfieldgroup legend {
+    color: #E91E8C !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    padding: 0 4px !important;
+}
+.contactfieldgroup .row {
+    padding: 6px 0 !important;
+}
+.contactfieldgroup label {
+    font-size: 11px !important;
+    color: #555 !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+.contactfieldgroup input,
+.contactfieldgroup textarea {
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 10px !important;
+    color: #e0e0e0 !important;
+    padding: 8px 14px !important;
+    font-size: 13px !important;
+}
+
+/* Address book list (left sidebar groups) */
+.addressbooklist li a {
+    color: #888 !important;
+    border-radius: 10px !important;
+    margin: 1px 6px !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+}
+.addressbooklist li.selected > a {
+    background: linear-gradient(135deg, rgba(233,30,140,0.06), rgba(155,38,217,0.03)) !important;
+    border: 1px solid rgba(233,30,140,0.12) !important;
+    color: #f0f0f0 !important;
+}
+</style>
+</head>
+<body class="task-addressbook layout-widescreen">
+
+<div id="layout" class="widescreen">
+
+    <!-- ═══ TASKMENU ═══ -->
+    <div id="layout-menu" class="menu" role="navigation">
+        <div class="op-brand">
+            <div class="op-brand-icon op-gradient">
+                <svg viewBox="0 0 24 24"><path d="M12 2L8.5 8.5H2L7 13l-2 7 7-4.5L19 20l-2-7 5-4.5h-6.5L12 2z"/></svg>
+            </div>
+            <div>
+                <span class="op-brand-text op-gradient-text">OVERPANEL</span>
+                <span class="op-brand-sub">Webmail</span>
+            </div>
+        </div>
+        <roundcube:object name="taskmenu" id="taskmenu" />
+        <div class="op-footer">Powered by OVERMEDIA</div>
+    </div>
+
+    <!-- ═══ SIDEBAR (address book groups) ═══ -->
+    <div id="layout-sidebar" class="sidebar" role="navigation">
+        <div class="header" role="toolbar">
+            <a class="button icon sidebar-menu" href="#sidebar-menu" data-target="sidebar-menu" tabindex="0">
+                <span class="inner"><roundcube:label name="options" /></span>
+            </a>
+            <span class="op-page-title">
+                <roundcube:label name="addressbook" />
+            </span>
+            <roundcube:object name="searchform" id="quicksearchbar" wrapper="searchbar"
+                arialabel="searchform" label-options="searchmod" />
+        </div>
+
+        <div id="directorylistcontainer" class="scroller">
+            <roundcube:object name="directorylist" id="directorylist"
+                type="ul" class="addressbooklist listing iconized treelist" />
+            <roundcube:object name="savedsearchlist" id="savedsearchlist"
+                type="ul" class="addressbooklist listing treelist" />
+        </div>
+    </div>
+
+    <!-- ═══ LIST (contact list) ═══ -->
+    <div id="layout-list" class="list" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-sidebar-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <span class="op-page-title">
+                <span class="op-icon op-gradient op-glow">
+                    <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                </span>
+                <roundcube:label name="contacts" />
+            </span>
+            <roundcube:object name="toolbar" id="contacttoolbar"
+                menu="toolbar-menu" />
+        </div>
+
+        <div id="contacts-table" class="scroller withfooter">
+            <roundcube:object name="contactlist" id="contactslist"
+                class="contactlist listing" />
+        </div>
+
+        <div class="footer" role="contentinfo">
+            <roundcube:object name="countdisplay" id="countdisplay"
+                label="contacts" />
+            <roundcube:object name="contactlist" id="contactnav"
+                type="pagenav" />
+        </div>
+    </div>
+
+    <!-- ═══ CONTENT (contact detail) ═══ -->
+    <div id="layout-content" class="content" role="main">
+        <div class="header" role="toolbar">
+            <a class="button icon back-content-button" href="#back"><span class="inner"><roundcube:label name="back" /></span></a>
+            <roundcube:object name="toolbar" id="contactactionbar"
+                menu="contact-menu" />
+        </div>
+
+        <div id="contactcontframe" class="scroller">
+            <roundcube:object name="contactcontentframe" id="contactcontframe" />
+        </div>
+    </div>
+
+</div>
+
+<!-- Popup menus -->
+<roundcube:object name="popupmenus" />
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>

@@ -1,0 +1,91 @@
+<roundcube:object name="doctype" value="html5" />
+<html>
+<head>
+<meta charset="UTF-8" />
+<title><roundcube:object name="pagetitle" /></title>
+<style>
+/* ── Print-friendly styles ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #222;
+    background: #fff;
+    padding: 24px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.print-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #E91E8C;
+    margin-bottom: 24px;
+}
+.print-header h1 {
+    font-size: 14px;
+    font-weight: 800;
+    color: #E91E8C;
+    letter-spacing: 2px;
+}
+.print-header p { font-size: 10px; color: #999; }
+
+/* Message headers */
+.messageheaderbox {
+    margin-bottom: 24px;
+}
+.messageheaderbox table { width: 100%; border-collapse: collapse; }
+.messageheaderbox td.header-title {
+    font-size: 10px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    padding: 3px 12px 3px 0;
+    white-space: nowrap;
+    vertical-align: top;
+    width: 60px;
+}
+.messageheaderbox td.header { color: #333; padding: 3px 0; }
+.messageheaderbox h2.subject {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 12px;
+}
+
+/* Message body */
+#messagebody {
+    color: #333;
+    line-height: 1.7;
+}
+
+/* Hide navigation elements for print */
+@media print {
+    .noprint { display: none !important; }
+    body { padding: 0; }
+}
+</style>
+</head>
+<body class="action-print">
+
+<div class="print-header noprint">
+    <div>
+        <h1>OVERPANEL</h1>
+        <p>Webmail</p>
+    </div>
+</div>
+
+<div id="message-header">
+    <roundcube:object name="messageHeaders" id="messageheaderbox"
+        class="messageheaderbox" />
+</div>
+
+<div id="message-body">
+    <roundcube:object name="messageBody" id="messagebody" />
+</div>
+
+<roundcube:object name="scripts" type="foot" />
+</body>
+</html>
