@@ -201,6 +201,24 @@ apt-get install -y -qq \
 
 log_ok "Zależności systemowe zainstalowane"
 
+# --- Ensure swap exists (pnpm install needs ~1.5 GB RAM) ---
+TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
+SWAP_MB=$(awk '/SwapTotal/ {printf "%d", $2/1024}' /proc/meminfo)
+if [[ "$SWAP_MB" -lt 512 ]]; then
+    log_info "RAM: ${TOTAL_RAM_MB} MB, Swap: ${SWAP_MB} MB — tworzenie swap 2 GB..."
+    if [[ ! -f /swapfile ]]; then
+        fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+        chmod 600 /swapfile
+        mkswap /swapfile > /dev/null 2>&1
+    fi
+    swapon /swapfile 2>/dev/null || true
+    # Persist across reboots
+    grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    log_ok "Swap 2 GB aktywny"
+else
+    log_info "Swap już skonfigurowany: ${SWAP_MB} MB"
+fi
+
 # ==============================================================================
 # STEP 4: Install Node.js 20
 # ==============================================================================
