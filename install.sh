@@ -641,12 +641,13 @@ cd "$INSTALL_DIR"
 
 # --- Create admin user ---
 log_info "Tworzenie użytkownika administratora..."
-ADMIN_HASH=$(node -e "
+# Use NODE_PATH to find bcrypt in project node_modules
+ADMIN_HASH=$(NODE_PATH="${INSTALL_DIR}/node_modules" node -e "
 const bcrypt = require('bcrypt');
 bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
 " 2>/dev/null) || {
-    # Fallback: try bcryptjs
-    ADMIN_HASH=$(node -e "
+    # Fallback: try bcryptjs (pure JS, no native compile needed)
+    ADMIN_HASH=$(NODE_PATH="${INSTALL_DIR}/node_modules" node -e "
 const bcrypt = require('bcryptjs');
 bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
 " 2>/dev/null) || {
@@ -656,6 +657,8 @@ bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
 }
 
 if [[ -n "${ADMIN_HASH:-}" ]]; then
+    DATABASE_URL="file:${INSTALL_DIR}/packages/db/panel.db" \
+    NODE_PATH="${INSTALL_DIR}/node_modules" \
     node -e "
 const { PrismaClient } = require('@overpanel/db');
 const p = new PrismaClient();

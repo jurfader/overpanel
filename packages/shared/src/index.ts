@@ -23,12 +23,18 @@ export interface AuthResponse {
 export type SiteStatus = 'active' | 'inactive' | 'pending'
 export type PhpVersion = '7.4' | '8.0' | '8.1' | '8.2' | '8.3'
 
+export type SiteType = 'php' | 'nodejs' | 'python' | 'proxy' | 'static'
+
 export interface Site {
   id: string
   domain: string
   status: SiteStatus
+  siteType: SiteType
   phpVersion: PhpVersion
   documentRoot: string
+  appPort: number | null
+  startCommand: string | null
+  nginxConfig: string | null
   userId: string
   hasSSL: boolean
   sslExpiry: string | null
