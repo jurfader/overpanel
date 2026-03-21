@@ -16,5 +16,8 @@
     "@types/node": "^20.14.0",
     "eslint": "^9.5.0",
     "prettier": "^3.3.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["node-pty", "@prisma/client", "prisma"]
   }
 }

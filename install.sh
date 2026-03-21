@@ -580,6 +580,8 @@ PNPMFILE
 
 log_info "Instalowanie zależności pnpm..."
 pnpm install --no-frozen-lockfile --ignore-scripts=false 2>&1 | grep -v "^$" | tail -5
+# Rebuild native modules explicitly (pnpm v10 may block scripts initially)
+pnpm rebuild node-pty 2>/dev/null || true
 log_ok "Zależności zainstalowane"
 
 # --- Generate Prisma client before any build ---
@@ -929,12 +931,12 @@ WEB_STATUS=$(systemctl is-active overpanel-web 2>/dev/null || echo "unknown")
 [[ "$API_STATUS" == "active" ]] && log_ok "overpanel-api: active" || {
     log_warn "overpanel-api: ${API_STATUS}"
     log_warn "Ostatnie logi API:"
-    journalctl -u overpanel-api -n 10 --no-pager 2>/dev/null | tail -5 | while read -r line; do log_warn "  $line"; done
+    journalctl -u overpanel-api -n 20 --no-pager 2>/dev/null | tail -15 | while read -r line; do log_warn "  $line"; done
 }
 [[ "$WEB_STATUS" == "active" ]] && log_ok "overpanel-web: active" || {
     log_warn "overpanel-web: ${WEB_STATUS}"
     log_warn "Ostatnie logi Web:"
-    journalctl -u overpanel-web -n 10 --no-pager 2>/dev/null | tail -5 | while read -r line; do log_warn "  $line"; done
+    journalctl -u overpanel-web -n 20 --no-pager 2>/dev/null | tail -15 | while read -r line; do log_warn "  $line"; done
 }
 
 # ==============================================================================

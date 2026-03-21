@@ -157,15 +157,19 @@ async function bootstrap() {
 
   terminal.on('connection', (socket) => {
     const { cols = 80, rows = 24 } = socket.handshake.query as { cols?: number; rows?: number }
-    const session = createSession(socket.id, Number(cols), Number(rows))
 
-    // Stream PTY output → client
-    session.term.onData((data) => {
-      socket.emit('data', data)
-    })
+    createSession(socket.id, Number(cols), Number(rows)).then((session) => {
+      // Stream PTY output → client
+      session.term.onData((data) => {
+        socket.emit('data', data)
+      })
 
-    session.term.onExit(({ exitCode }) => {
-      socket.emit('exit', exitCode)
+      session.term.onExit(({ exitCode }) => {
+        socket.emit('exit', exitCode)
+        socket.disconnect()
+      })
+    }).catch((err) => {
+      socket.emit('error', 'Terminal not available: ' + err.message)
       socket.disconnect()
     })
 

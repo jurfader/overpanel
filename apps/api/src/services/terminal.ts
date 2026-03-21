@@ -1,13 +1,23 @@
-import * as pty from 'node-pty'
+// node-pty is a native module — load lazily so API starts even if not compiled
+type PtyModule = typeof import('node-pty')
+let _pty: PtyModule | null = null
+
+async function getPty(): Promise<PtyModule> {
+  if (!_pty) {
+    _pty = (await import('node-pty')) as PtyModule
+  }
+  return _pty
+}
 
 export interface PtySession {
   pid: number
-  term: pty.IPty
+  term: import('node-pty').IPty
 }
 
 const sessions = new Map<string, PtySession>()
 
-export function createSession(socketId: string, cols = 80, rows = 24): PtySession {
+export async function createSession(socketId: string, cols = 80, rows = 24): Promise<PtySession> {
+  const pty = await getPty()
   const term = pty.spawn('/bin/bash', [], {
     name: 'xterm-color',
     cols,
