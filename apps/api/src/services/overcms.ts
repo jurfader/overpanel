@@ -96,6 +96,8 @@ REDIS_URL=redis://overcms-redis-${containerPrefix}:6379
 REDIS_PASSWORD=${redisPassword}
 
 # S3 / MinIO
+MINIO_ROOT_USER=overcms-minio
+MINIO_ROOT_PASSWORD=${minioPassword}
 S3_ENDPOINT=http://overcms-minio-${containerPrefix}:9000
 S3_REGION=auto
 S3_ACCESS_KEY_ID=overcms-minio
@@ -108,12 +110,12 @@ API_PORT=3000
 API_URL=http://overcms-api-${containerPrefix}:3000
 API_DOMAIN=${domain}
 BETTER_AUTH_SECRET=${authSecret}
-BETTER_AUTH_URL=https://${domain}/api
-ADMIN_CORS_ORIGINS=https://${domain},https://admin.${domain}
+BETTER_AUTH_URL=https://${domain}
+ADMIN_CORS_ORIGINS=https://${domain}
 
 # Admin
 ADMIN_DOMAIN=${domain}
-NEXT_PUBLIC_API_URL=https://${domain}/api
+NEXT_PUBLIC_API_URL=https://${domain}
 
 # License — centralny serwer licencji (nie lokalny kontener)
 LICENSE_SERVER_URL=https://license.overcms.pl
@@ -154,6 +156,9 @@ services:
       - "${apiPort}:3000"
   admin:
     container_name: overcms-admin-${containerPrefix}
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: https://${domain}
     ports:
       - "${adminPort}:3001"
   license-server:

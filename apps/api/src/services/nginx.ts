@@ -167,9 +167,9 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: Ov
 
     client_max_body_size 50M;
 
-    # API (strip /api prefix before proxying)
+    # API
     location /api/ {
-        proxy_pass http://127.0.0.1:${apiPort}/;
+        proxy_pass http://127.0.0.1:${apiPort};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
