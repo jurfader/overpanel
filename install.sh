@@ -756,17 +756,14 @@ server {
     listen 80;
     server_name PANEL_DOMAIN_PLACEHOLDER;
 
-    # Frontend — Next.js (port 3333)
-    location / {
-        proxy_pass         http://127.0.0.1:3333;
+    # API — Fastify (port 4000)
+    location /api/ {
+        proxy_pass         http://127.0.0.1:4000;
         proxy_http_version 1.1;
-        proxy_set_header   Upgrade    $http_upgrade;
-        proxy_set_header   Connection 'upgrade';
         proxy_set_header   Host       $host;
         proxy_set_header   X-Real-IP  $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
         proxy_read_timeout 60s;
     }
 
@@ -780,15 +777,30 @@ server {
         proxy_set_header   X-Real-IP  $remote_addr;
         proxy_cache_bypass $http_upgrade;
     }
+
+    # Frontend — Next.js (port 3333)
+    location / {
+        proxy_pass         http://127.0.0.1:3333;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection 'upgrade';
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 60s;
+    }
 }
 NGINX_CONF
 
 # Replace domain placeholder with actual domain
 sed -i "s/PANEL_DOMAIN_PLACEHOLDER/${PANEL_DOMAIN}/" /etc/nginx/sites-available/overpanel
 
-# Enable site, disable default
+# Enable site, disable defaults
 ln -sf /etc/nginx/sites-available/overpanel /etc/nginx/sites-enabled/overpanel
 rm -f /etc/nginx/sites-enabled/default
+rm -f /etc/nginx/conf.d/default.conf
 
 # Test and reload
 nginx -t 2>/dev/null && systemctl reload nginx
