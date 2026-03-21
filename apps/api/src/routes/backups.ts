@@ -13,6 +13,8 @@ import {
   restoreSiteFiles,
   restoreDatabase,
 } from '../services/backup.js'
+import { uploadToProviders, testProvider } from '../services/backup-providers.js'
+import type { BackupProvider } from '../services/backup-providers.js'
 
 const createBackupSchema = z.object({
   siteId: z.string(),
@@ -136,17 +138,19 @@ export async function backupsRoutes(fastify: FastifyInstance) {
           data: { status: 'success', sizeMb, path: backupPath ?? null },
         })
 
-        // Try to upload to S3 in the background (fire-and-forget)
+        // Upload to all configured backup providers (fire-and-forget)
         if (backupPath) {
           try {
-            const { uploadBackupToS3 } = await import('../services/s3.js')
-            const s3Url = await uploadBackupToS3(backupPath)
-            if (s3Url) {
-              // s3Url field does not exist on Backup model — log only
-              console.log(`[Backup] Uploaded to S3: ${s3Url}`)
+            const results = await uploadToProviders(backupPath)
+            for (const r of results) {
+              if (r.success) {
+                console.log(`[Backup] Uploaded to ${r.provider}: ${r.url ?? 'OK'}`)
+              } else {
+                console.error(`[Backup] ${r.provider} upload failed: ${r.error ?? 'unknown'}`)
+              }
             }
           } catch (err) {
-            console.error('[Backup] S3 upload failed:', err)
+            console.error('[Backup] Provider upload failed:', err)
           }
         }
       } catch (err: any) {
@@ -281,5 +285,79 @@ export async function backupsRoutes(fastify: FastifyInstance) {
 
     const stream = createReadStream(filePath)
     return reply.send(stream)
+  })
+
+  // ── Backup provider & schedule endpoints ─────────────────────────────────
+
+  // POST /api/backups/test-provider — test a backup provider connection
+  fastify.post('/test-provider', { preHandler: [adminOnly] }, async (request, reply) => {
+    const schema = z.object({
+      provider: z.enum(['s3', 'sftp', 'gdrive', 'dropbox', 'local']),
+      config: z.record(z.any()).optional(),
+    })
+    const body = schema.safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' })
+    }
+
+    const { provider, config: providerConfig } = body.data
+    const result = await testProvider(provider as BackupProvider, providerConfig ?? {})
+    return reply.send({ success: result.success, data: result })
+  })
+
+  // GET /api/backups/schedule — get current schedule settings
+  fastify.get('/schedule', { preHandler: [adminOnly] }, async (_request, reply) => {
+    const keys = ['backup_schedule', 'backup_time', 'backup_retention']
+    const rows = await prisma.setting.findMany({ where: { key: { in: keys } } })
+    const settings = Object.fromEntries(rows.map(r => [r.key, r.value]))
+
+    return reply.send({
+      success: true,
+      data: {
+        schedule: settings.backup_schedule || 'disabled',
+        time: settings.backup_time || '03:00',
+        retention: parseInt(settings.backup_retention || '10', 10),
+      },
+    })
+  })
+
+  // POST /api/backups/schedule — update schedule settings
+  fastify.post('/schedule', { preHandler: [adminOnly] }, async (request, reply) => {
+    const schema = z.object({
+      schedule: z.enum(['daily', 'weekly', 'monthly', 'disabled']).optional(),
+      time: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be in HH:MM format').optional(),
+      retention: z.number().int().min(1).max(1000).optional(),
+    })
+    const body = schema.safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' })
+    }
+
+    const { schedule, time, retention } = body.data
+    const upsert = async (key: string, value: string) => {
+      await prisma.setting.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value },
+      })
+    }
+
+    if (schedule !== undefined) await upsert('backup_schedule', schedule)
+    if (time !== undefined) await upsert('backup_time', time)
+    if (retention !== undefined) await upsert('backup_retention', String(retention))
+
+    // Return updated values
+    const keys = ['backup_schedule', 'backup_time', 'backup_retention']
+    const rows = await prisma.setting.findMany({ where: { key: { in: keys } } })
+    const settings = Object.fromEntries(rows.map(r => [r.key, r.value]))
+
+    return reply.send({
+      success: true,
+      data: {
+        schedule: settings.backup_schedule || 'disabled',
+        time: settings.backup_time || '03:00',
+        retention: parseInt(settings.backup_retention || '10', 10),
+      },
+    })
   })
 }

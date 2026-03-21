@@ -31,24 +31,46 @@ async function getSettings(keys: string[]): Promise<Record<string, string>> {
 // ── All setting keys exposed via the API ──────────────────────────────────────
 
 const SETTING_KEYS = [
+  // Panel
   'panel_name',
   'panel_url',
+  'panel_logo_url',
+  'panel_favicon_url',
+  // SMTP
   'smtp_host',
   'smtp_port',
   'smtp_user',
   'smtp_from',
   'smtp_secure',
-  'backup_retention_days',
+  // Limits
   'max_sites_per_user',
   'max_dbs_per_user',
+  // Cloudflare
   'cf_global_token',
+  // S3 / Backblaze
   's3_endpoint',
   's3_bucket',
   's3_access_key',
   's3_secret_key',
   's3_region',
-  'panel_logo_url',
-  'panel_favicon_url',
+  // SFTP backup
+  'sftp_host',
+  'sftp_port',
+  'sftp_username',
+  'sftp_password',
+  'sftp_key_path',
+  'sftp_remote_path',
+  // Google Drive backup
+  'gdrive_service_account',
+  'gdrive_folder_id',
+  // Dropbox backup
+  'dropbox_access_token',
+  'dropbox_remote_path',
+  // Backup schedule
+  'backup_schedule',
+  'backup_time',
+  'backup_retention',
+  'backup_retention_days',
 ] as const
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -63,8 +85,12 @@ export async function settingsRoutes(fastify: FastifyInstance) {
   // POST /api/settings — update settings
   fastify.post('/', { preHandler: [adminOnly] }, async (request, reply) => {
     const bodySchema = z.object({
+      // Panel
       panel_name: z.string().optional(),
       panel_url: z.string().optional(),
+      panel_logo_url: z.string().optional(),
+      panel_favicon_url: z.string().optional(),
+      // SMTP
       smtp_host: z.string().optional(),
       smtp_port: z
         .string()
@@ -74,20 +100,38 @@ export async function settingsRoutes(fastify: FastifyInstance) {
       smtp_password: z.string().optional(),
       smtp_from: z.string().optional(),
       smtp_secure: z.string().optional(),
+      // Limits
+      max_sites_per_user: z.string().optional(),
+      max_dbs_per_user: z.string().optional(),
       backup_retention_days: z
         .string()
         .regex(/^\d+$/, 'backup_retention_days must be numeric')
         .optional(),
-      max_sites_per_user: z.string().optional(),
-      max_dbs_per_user: z.string().optional(),
+      // Cloudflare
       cf_global_token: z.string().optional(),
+      // S3 / Backblaze
       s3_endpoint: z.string().optional(),
       s3_bucket: z.string().optional(),
       s3_access_key: z.string().optional(),
       s3_secret_key: z.string().optional(),
       s3_region: z.string().optional(),
-      panel_logo_url: z.string().optional(),
-      panel_favicon_url: z.string().optional(),
+      // SFTP backup
+      sftp_host: z.string().optional(),
+      sftp_port: z.string().regex(/^\d+$/, 'sftp_port must be numeric').optional(),
+      sftp_username: z.string().optional(),
+      sftp_password: z.string().optional(),
+      sftp_key_path: z.string().optional(),
+      sftp_remote_path: z.string().optional(),
+      // Google Drive backup
+      gdrive_service_account: z.string().optional(),
+      gdrive_folder_id: z.string().optional(),
+      // Dropbox backup
+      dropbox_access_token: z.string().optional(),
+      dropbox_remote_path: z.string().optional(),
+      // Backup schedule
+      backup_schedule: z.enum(['daily', 'weekly', 'monthly', 'disabled']).optional(),
+      backup_time: z.string().regex(/^\d{2}:\d{2}$/, 'backup_time must be HH:MM').optional(),
+      backup_retention: z.string().regex(/^\d+$/, 'backup_retention must be numeric').optional(),
     })
 
     const parsed = bodySchema.safeParse(request.body)

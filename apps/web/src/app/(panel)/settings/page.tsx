@@ -35,6 +35,7 @@ import {
   Cloud,
   HardDrive,
   AlertTriangle,
+  Clock,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -151,13 +152,29 @@ export default function SettingsPage() {
 
   // ── S3 / Backblaze B2 state ──────────────────────────────────────────────────
   const [s3, setS3] = useState({
-    s3_endpoint: '',
-    s3_bucket: '',
-    s3_access_key: '',
-    s3_secret_key: '',
-    s3_region: '',
+    s3_endpoint: '', s3_bucket: '', s3_access_key: '', s3_secret_key: '', s3_region: '',
   })
   const [savingS3, setSavingS3] = useState(false)
+
+  // ── SFTP state ─────────────────────────────────────────────────────────────
+  const [sftp, setSftp] = useState({
+    sftp_host: '', sftp_port: '22', sftp_username: '', sftp_password: '', sftp_remote_path: '/backups',
+  })
+  const [savingSftp, setSavingSftp] = useState(false)
+
+  // ── Google Drive state ─────────────────────────────────────────────────────
+  const [gdrive, setGdrive] = useState({ gdrive_service_account: '', gdrive_folder_id: '' })
+  const [savingGdrive, setSavingGdrive] = useState(false)
+
+  // ── Dropbox state ──────────────────────────────────────────────────────────
+  const [dropbox, setDropbox] = useState({ dropbox_access_token: '', dropbox_remote_path: '/overpanel-backups' })
+  const [savingDropbox, setSavingDropbox] = useState(false)
+
+  // ── Backup schedule state ──────────────────────────────────────────────────
+  const [schedule, setSchedule] = useState({
+    backup_schedule: 'disabled', backup_time: '03:00', backup_retention: '7',
+  })
+  const [savingSchedule, setSavingSchedule] = useState(false)
 
   // ── Audit log ───────────────────────────────────────────────────────────────
   const {
@@ -208,8 +225,28 @@ export default function SettingsPage() {
       s3_endpoint: settingsData['s3_endpoint'] ?? '',
       s3_bucket: settingsData['s3_bucket'] ?? '',
       s3_access_key: settingsData['s3_access_key'] ?? '',
-      s3_secret_key: '', // never pre-filled
+      s3_secret_key: '',
       s3_region: settingsData['s3_region'] ?? '',
+    })
+    setSftp({
+      sftp_host: settingsData['sftp_host'] ?? '',
+      sftp_port: settingsData['sftp_port'] ?? '22',
+      sftp_username: settingsData['sftp_username'] ?? '',
+      sftp_password: '',
+      sftp_remote_path: settingsData['sftp_remote_path'] ?? '/backups',
+    })
+    setGdrive({
+      gdrive_service_account: '',
+      gdrive_folder_id: settingsData['gdrive_folder_id'] ?? '',
+    })
+    setDropbox({
+      dropbox_access_token: '',
+      dropbox_remote_path: settingsData['dropbox_remote_path'] ?? '/overpanel-backups',
+    })
+    setSchedule({
+      backup_schedule: settingsData['backup_schedule'] ?? 'disabled',
+      backup_time: settingsData['backup_time'] ?? '03:00',
+      backup_retention: settingsData['backup_retention'] ?? '7',
     })
   }, [settingsData])
 
@@ -324,6 +361,55 @@ export default function SettingsPage() {
     } finally {
       setSavingS3(false)
     }
+  }
+
+  const handleSaveSftp = async () => {
+    setSavingSftp(true)
+    try {
+      const payload: Record<string, string> = {
+        sftp_host: sftp.sftp_host, sftp_port: sftp.sftp_port,
+        sftp_username: sftp.sftp_username, sftp_remote_path: sftp.sftp_remote_path,
+      }
+      if (sftp.sftp_password) payload['sftp_password'] = sftp.sftp_password
+      await api.post('/api/settings', payload)
+      showToast('Konfiguracja SFTP zapisana')
+    } catch (err) { showToast(err instanceof ApiError ? err.message : 'Błąd zapisu', 'error') }
+    finally { setSavingSftp(false) }
+  }
+
+  const handleSaveGdrive = async () => {
+    setSavingGdrive(true)
+    try {
+      const payload: Record<string, string> = { gdrive_folder_id: gdrive.gdrive_folder_id }
+      if (gdrive.gdrive_service_account) payload['gdrive_service_account'] = gdrive.gdrive_service_account
+      await api.post('/api/settings', payload)
+      showToast('Konfiguracja Google Drive zapisana')
+    } catch (err) { showToast(err instanceof ApiError ? err.message : 'Błąd zapisu', 'error') }
+    finally { setSavingGdrive(false) }
+  }
+
+  const handleSaveDropbox = async () => {
+    setSavingDropbox(true)
+    try {
+      const payload: Record<string, string> = { dropbox_remote_path: dropbox.dropbox_remote_path }
+      if (dropbox.dropbox_access_token) payload['dropbox_access_token'] = dropbox.dropbox_access_token
+      await api.post('/api/settings', payload)
+      showToast('Konfiguracja Dropbox zapisana')
+    } catch (err) { showToast(err instanceof ApiError ? err.message : 'Błąd zapisu', 'error') }
+    finally { setSavingDropbox(false) }
+  }
+
+  const handleSaveSchedule = async () => {
+    setSavingSchedule(true)
+    try {
+      await api.post('/api/settings', {
+        backup_schedule: schedule.backup_schedule,
+        backup_time: schedule.backup_time,
+        backup_retention: schedule.backup_retention,
+      })
+      showToast('Harmonogram backupów zapisany')
+    } catch (err) { showToast(err instanceof ApiError ? err.message : 'Błąd zapisu', 'error') }
+    finally { setSavingSchedule(false) }
   }
 
   // ── Tab definitions ───────────────────────────────────────────────────────────
@@ -696,78 +782,166 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* ── TAB: Integracje ──────────────────────────────────────────────── */}
+        {/* ── TAB: Integracje (Backup Providers + Schedule) ─────────────── */}
         {activeTab === 'integrations' && (
           <div className="space-y-5 max-w-2xl">
+
+            {/* ── Auto-backup schedule ──────────────────────────────────────── */}
             <Card>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                  <HardDrive className="w-4.5 h-4.5 text-blue-400" />
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-[var(--primary)]/10 flex items-center justify-center">
+                  <Clock className="w-4.5 h-4.5 text-[var(--primary)]" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">S3 / Backblaze B2</p>
-                  <p className="text-xs text-[var(--text-muted)]">Przechowywanie backupów w chmurze</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Automatyczne backupy</p>
+                  <p className="text-xs text-[var(--text-muted)]">Harmonogram i retencja</p>
                 </div>
               </div>
-
-              {/* Warning */}
-              <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-400">
-                  Konfiguracja S3 jest wymagana do przechowywania backupów w chmurze
-                </p>
-              </div>
-
               <div className="space-y-4">
-                <Input
-                  label="Endpoint URL"
-                  placeholder="https://s3.us-west-002.backblazeb2.com"
-                  value={s3.s3_endpoint}
-                  onChange={(e) => setS3((s) => ({ ...s, s3_endpoint: e.target.value }))}
-                  icon={<Globe className="w-4 h-4" />}
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1.5 uppercase tracking-wider font-medium">Częstotliwość</label>
+                    <select
+                      className="w-full h-9 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)]"
+                      value={schedule.backup_schedule}
+                      onChange={(e) => setSchedule((s) => ({ ...s, backup_schedule: e.target.value }))}
+                    >
+                      <option value="disabled">Wyłączone</option>
+                      <option value="daily">Codziennie</option>
+                      <option value="weekly">Co tydzień</option>
+                      <option value="monthly">Co miesiąc</option>
+                    </select>
+                  </div>
                   <Input
-                    label="Bucket"
-                    placeholder="my-backups"
-                    value={s3.s3_bucket}
-                    onChange={(e) => setS3((s) => ({ ...s, s3_bucket: e.target.value }))}
-                    icon={<HardDrive className="w-4 h-4" />}
+                    label="Godzina"
+                    type="time"
+                    value={schedule.backup_time}
+                    onChange={(e) => setSchedule((s) => ({ ...s, backup_time: e.target.value }))}
                   />
                   <Input
-                    label="Region"
-                    placeholder="us-west-002"
-                    value={s3.s3_region}
-                    onChange={(e) => setS3((s) => ({ ...s, s3_region: e.target.value }))}
+                    label="Retencja (dni)"
+                    type="number"
+                    value={schedule.backup_retention}
+                    onChange={(e) => setSchedule((s) => ({ ...s, backup_retention: e.target.value }))}
                   />
                 </div>
-
-                <Input
-                  label="Access Key ID"
-                  placeholder="AKIAIOSFODNN7EXAMPLE"
-                  value={s3.s3_access_key}
-                  onChange={(e) => setS3((s) => ({ ...s, s3_access_key: e.target.value }))}
-                  icon={<Key className="w-4 h-4" />}
-                />
-
-                <Input
-                  label="Secret Access Key"
-                  type="password"
-                  placeholder="••••••••  (pozostaw puste, aby nie zmieniać)"
-                  value={s3.s3_secret_key}
-                  onChange={(e) => setS3((s) => ({ ...s, s3_secret_key: e.target.value }))}
-                  icon={<Lock className="w-4 h-4" />}
-                />
               </div>
-
-              <div className="mt-6 flex justify-end">
-                <Button onClick={handleSaveS3} loading={savingS3}>
-                  <Save className="w-4 h-4" />
-                  Zapisz
-                </Button>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={handleSaveSchedule} loading={savingSchedule}><Save className="w-4 h-4" /> Zapisz</Button>
               </div>
             </Card>
+
+            {/* ── S3 / Backblaze B2 ────────────────────────────────────────── */}
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <Cloud className="w-4.5 h-4.5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">S3 / Backblaze B2 / Wasabi / DO Spaces</p>
+                  <p className="text-xs text-[var(--text-muted)]">Dowolne S3-kompatybilne storage</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <Input label="Endpoint URL" placeholder="https://s3.us-west-002.backblazeb2.com" value={s3.s3_endpoint}
+                  onChange={(e) => setS3((s) => ({ ...s, s3_endpoint: e.target.value }))} icon={<Globe className="w-4 h-4" />} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label="Bucket" placeholder="my-backups" value={s3.s3_bucket}
+                    onChange={(e) => setS3((s) => ({ ...s, s3_bucket: e.target.value }))} icon={<HardDrive className="w-4 h-4" />} />
+                  <Input label="Region" placeholder="us-west-002" value={s3.s3_region}
+                    onChange={(e) => setS3((s) => ({ ...s, s3_region: e.target.value }))} />
+                </div>
+                <Input label="Access Key ID" placeholder="AKIAIOSFODNN7EXAMPLE" value={s3.s3_access_key}
+                  onChange={(e) => setS3((s) => ({ ...s, s3_access_key: e.target.value }))} icon={<Key className="w-4 h-4" />} />
+                <Input label="Secret Access Key" type="password" placeholder="••••••••" value={s3.s3_secret_key}
+                  onChange={(e) => setS3((s) => ({ ...s, s3_secret_key: e.target.value }))} icon={<Lock className="w-4 h-4" />} />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={handleSaveS3} loading={savingS3}><Save className="w-4 h-4" /> Zapisz</Button>
+              </div>
+            </Card>
+
+            {/* ── SFTP ─────────────────────────────────────────────────────── */}
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center">
+                  <Server className="w-4.5 h-4.5 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">SFTP / SSH</p>
+                  <p className="text-xs text-[var(--text-muted)]">Backup na zdalny serwer</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label="Host" placeholder="backup.example.com" value={sftp.sftp_host}
+                    onChange={(e) => setSftp((s) => ({ ...s, sftp_host: e.target.value }))} icon={<Server className="w-4 h-4" />} />
+                  <Input label="Port" placeholder="22" value={sftp.sftp_port}
+                    onChange={(e) => setSftp((s) => ({ ...s, sftp_port: e.target.value }))} />
+                </div>
+                <Input label="Użytkownik" placeholder="backup-user" value={sftp.sftp_username}
+                  onChange={(e) => setSftp((s) => ({ ...s, sftp_username: e.target.value }))} />
+                <Input label="Hasło" type="password" placeholder="••••••••" value={sftp.sftp_password}
+                  onChange={(e) => setSftp((s) => ({ ...s, sftp_password: e.target.value }))} icon={<Lock className="w-4 h-4" />} />
+                <Input label="Ścieżka zdalna" placeholder="/backups" value={sftp.sftp_remote_path}
+                  onChange={(e) => setSftp((s) => ({ ...s, sftp_remote_path: e.target.value }))} />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={handleSaveSftp} loading={savingSftp}><Save className="w-4 h-4" /> Zapisz</Button>
+              </div>
+            </Card>
+
+            {/* ── Google Drive ─────────────────────────────────────────────── */}
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                  <Cloud className="w-4.5 h-4.5 text-yellow-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Google Drive</p>
+                  <p className="text-xs text-[var(--text-muted)]">Przez Service Account (JSON key)</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1.5 uppercase tracking-wider font-medium">Service Account JSON</label>
+                  <textarea
+                    className="w-full h-28 px-3 py-2 rounded-xl text-xs font-mono bg-white/5 border border-white/10 text-[var(--text-primary)] resize-none focus:outline-none focus:border-[var(--primary)]/40"
+                    placeholder='{"type":"service_account","project_id":"...","private_key":"..."}'
+                    value={gdrive.gdrive_service_account}
+                    onChange={(e) => setGdrive((s) => ({ ...s, gdrive_service_account: e.target.value }))}
+                  />
+                </div>
+                <Input label="Folder ID" placeholder="1ABCdef... (z URL folderu Drive)" value={gdrive.gdrive_folder_id}
+                  onChange={(e) => setGdrive((s) => ({ ...s, gdrive_folder_id: e.target.value }))} />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={handleSaveGdrive} loading={savingGdrive}><Save className="w-4 h-4" /> Zapisz</Button>
+              </div>
+            </Card>
+
+            {/* ── Dropbox ──────────────────────────────────────────────────── */}
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-blue-400/10 flex items-center justify-center">
+                  <Layers className="w-4.5 h-4.5 text-blue-300" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Dropbox</p>
+                  <p className="text-xs text-[var(--text-muted)]">Przez Access Token</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <Input label="Access Token" type="password" placeholder="••••••••" value={dropbox.dropbox_access_token}
+                  onChange={(e) => setDropbox((s) => ({ ...s, dropbox_access_token: e.target.value }))} icon={<Key className="w-4 h-4" />} />
+                <Input label="Ścieżka w Dropbox" placeholder="/overpanel-backups" value={dropbox.dropbox_remote_path}
+                  onChange={(e) => setDropbox((s) => ({ ...s, dropbox_remote_path: e.target.value }))} />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={handleSaveDropbox} loading={savingDropbox}><Save className="w-4 h-4" /> Zapisz</Button>
+              </div>
+            </Card>
+
           </div>
         )}
 

@@ -27,6 +27,7 @@ import { nodejsRoutes } from './routes/nodejs.js'
 import { phpRoutes } from './routes/php.js'
 import { sslRoutes } from './routes/ssl.js'
 import { startStatsEmitter } from './system/stats-emitter.js'
+import { startBackupScheduler } from './services/backup-scheduler.js'
 import { authMiddleware } from './middleware/auth.js'
 import { prisma } from '@overpanel/db'
 import { createSession, destroySession, writeSession, resizeSession } from './services/terminal.js'
@@ -199,6 +200,9 @@ async function bootstrap() {
       destroySession(socket.id)
     })
   })
+
+  // Start automated backup scheduler
+  startBackupScheduler()
 
   fastify.log.info(`OVERPANEL API running on http://${HOST}:${PORT}`)
 }
