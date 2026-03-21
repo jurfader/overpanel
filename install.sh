@@ -208,11 +208,12 @@ log_step "Instalacja Node.js 20"
 
 if command -v node &>/dev/null; then
     NODE_CURRENT=$(node --version 2>/dev/null || echo "unknown")
+    NODE_MAJOR=$(node -e "process.stdout.write(String(parseInt(process.version.slice(1))))" 2>/dev/null || echo "0")
     log_warn "Node.js już zainstalowany: ${NODE_CURRENT}"
-    if [[ "$NODE_CURRENT" == v20* ]]; then
-        log_ok "Node.js 20 jest już zainstalowany — pomijam"
+    if [[ "$NODE_MAJOR" -ge 18 ]]; then
+        log_ok "Node.js ${NODE_CURRENT} (>= 18) — pomijam instalację"
     else
-        log_info "Instalowanie Node.js 20 (nadpisuje ${NODE_CURRENT})..."
+        log_info "Node.js ${NODE_CURRENT} — za stara wersja, aktualizacja do 20..."
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null 2>&1
         apt-get install -y nodejs > /dev/null 2>&1
     fi
@@ -259,6 +260,30 @@ else
 
     log_info "Instalowanie Nginx..."
     apt-get install -y nginx > /dev/null 2>&1
+
+    # Ensure mime.types exists (may be missing after CloudPanel or other panel removal)
+    if [[ ! -f /etc/nginx/mime.types ]]; then
+        log_warn "Brak /etc/nginx/mime.types — odtwarzanie z paczki..."
+        mkdir -p /tmp/nginx-extract-tmp
+        DEB=$(ls /var/cache/apt/archives/nginx_*.deb 2>/dev/null | head -1)
+        if [[ -n "$DEB" ]]; then
+            dpkg -x "$DEB" /tmp/nginx-extract-tmp 2>/dev/null
+            cp /tmp/nginx-extract-tmp/etc/nginx/mime.types /etc/nginx/mime.types 2>/dev/null || true
+            cp /tmp/nginx-extract-tmp/etc/nginx/fastcgi_params /etc/nginx/fastcgi_params 2>/dev/null || true
+            rm -rf /tmp/nginx-extract-tmp
+        else
+            curl -sS -o /etc/nginx/mime.types https://raw.githubusercontent.com/nginx/nginx/master/conf/mime.types 2>/dev/null || true
+        fi
+    fi
+
+    # Ensure sites-available/sites-enabled exist (nginx.org package uses conf.d instead)
+    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d
+
+    # If nginx.conf doesn't include sites-enabled, patch it
+    if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
+        sed -i '/include \/etc\/nginx\/conf\.d/a\    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf 2>/dev/null || true
+    fi
+
     systemctl enable nginx > /dev/null 2>&1
     systemctl start nginx || {
         log_warn "Nginx nie wystartował — sprawdzanie logów..."
@@ -278,8 +303,8 @@ log_step "Instalacja MySQL 8"
 # Store password to a file for idempotency
 MYSQL_PASS_FILE="/root/.overpanel_mysql_pass"
 
-if systemctl is-active --quiet mysql 2>/dev/null; then
-    log_warn "MySQL już działa"
+# Helper: set/read root password once MySQL is confirmed running
+_mysql_configure_root_pass() {
     if [[ -f "$MYSQL_PASS_FILE" ]]; then
         MYSQL_ROOT_PASS=$(cat "$MYSQL_PASS_FILE")
         log_ok "Hasło MySQL odczytane z ${MYSQL_PASS_FILE}"
@@ -291,8 +316,49 @@ if systemctl is-active --quiet mysql 2>/dev/null; then
         mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MYSQL_ROOT_PASS}';" 2>/dev/null || true
         mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
     fi
+}
+
+INSTALL_MYSQL=false
+
+if mysqladmin ping --silent 2>/dev/null; then
+    # Any MySQL/Percona variant is already up
+    log_warn "MySQL/Percona już działa — pomijam instalację"
+    _mysql_configure_root_pass
+elif command -v mysqld &>/dev/null || command -v mysql &>/dev/null; then
+    # Binary present but service not running — try to start it
+    log_warn "MySQL zainstalowany ale nie działa — próba uruchomienia..."
+    # Fix missing my.cnf if needed (common after CloudPanel removal)
+    if [[ ! -f /etc/mysql/my.cnf ]]; then
+        mkdir -p /etc/mysql
+        cat > /etc/mysql/my.cnf << 'MYCNF'
+[mysqld]
+user = mysql
+datadir = /var/lib/mysql
+socket = /var/run/mysqld/mysqld.sock
+pid-file = /var/run/mysqld/mysqld.pid
+log-error = /var/log/mysql/error.log
+
+[client]
+socket = /var/run/mysqld/mysqld.sock
+MYCNF
+        mkdir -p /var/run/mysqld /var/log/mysql
+        chown mysql:mysql /var/run/mysqld /var/log/mysql 2>/dev/null || true
+    fi
+    systemctl start mysql 2>/dev/null || systemctl start mysqld 2>/dev/null || true
+    sleep 2
+    if mysqladmin ping --silent 2>/dev/null; then
+        log_ok "MySQL uruchomiony pomyślnie"
+        _mysql_configure_root_pass
+    else
+        log_warn "MySQL nie mógł wystartować — instalacja standardowego MySQL 8..."
+        INSTALL_MYSQL=true
+    fi
 else
-    log_info "Instalowanie MySQL Server..."
+    INSTALL_MYSQL=true
+fi
+
+if [[ "$INSTALL_MYSQL" == "true" ]]; then
+    log_info "Instalowanie MySQL Server 8..."
     apt-get install -y mysql-server > /dev/null 2>&1
     systemctl enable mysql > /dev/null 2>&1
     systemctl start mysql
@@ -395,13 +461,23 @@ else
     curl -sS -o "$TMP_WP" https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
 
     log_info "Weryfikacja WP-CLI..."
-    php "$TMP_WP" --info --allow-root > /dev/null 2>&1 || log_error "WP-CLI phar jest nieprawidłowy"
-
-    chmod +x "$TMP_WP"
-    mv "$TMP_WP" /usr/local/bin/wp
+    if php "$TMP_WP" --info --allow-root > /dev/null 2>&1; then
+        chmod +x "$TMP_WP"
+        mv "$TMP_WP" /usr/local/bin/wp
+    else
+        log_warn "WP-CLI weryfikacja nieudana — próba ponownego pobrania..."
+        curl -sL -o "$TMP_WP" "https://github.com/wp-cli/wp-cli/releases/latest/download/wp-cli.phar" 2>/dev/null
+        if php "$TMP_WP" --info --allow-root > /dev/null 2>&1; then
+            chmod +x "$TMP_WP"
+            mv "$TMP_WP" /usr/local/bin/wp
+        else
+            log_warn "WP-CLI nie udało się zainstalować — WordPress auto-installer będzie niedostępny"
+            rm -f "$TMP_WP"
+        fi
+    fi
 fi
 
-WP_VER=$(wp --version --allow-root 2>/dev/null || echo "installed")
+WP_VER=$(wp --version --allow-root 2>/dev/null || echo "niedostępny")
 log_ok "WP-CLI: ${WP_VER}"
 
 # ==============================================================================
