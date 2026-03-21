@@ -158,26 +158,28 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <Topbar title="Dashboard" subtitle="Przegląd serwera" />
+      <Topbar title="Dashboard" subtitle={isAdmin ? 'Przegląd serwera' : 'Twoje zasoby'} />
 
       <div className="p-6 space-y-6">
-        {/* Connection badge */}
-        <div className="flex items-center gap-2 text-xs">
-          {connected ? (
-            <span className="flex items-center gap-1.5 text-green-400">
-              <Wifi className="w-3.5 h-3.5" />
-              Live
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
-              <WifiOff className="w-3.5 h-3.5" />
-              Demo mode
-            </span>
-          )}
-        </div>
+        {/* Connection badge — admin only */}
+        {isAdmin && (
+          <div className="flex items-center gap-2 text-xs">
+            {connected ? (
+              <span className="flex items-center gap-1.5 text-green-400">
+                <Wifi className="w-3.5 h-3.5" />
+                Live
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
+                <WifiOff className="w-3.5 h-3.5" />
+                Demo mode
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Top stats */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className={`grid gap-4 ${isAdmin ? 'grid-cols-2 xl:grid-cols-4' : 'grid-cols-2 lg:grid-cols-3'}`}>
           <StatCard
             title="Strony WWW"
             value={counts ? String(counts.sitesCount) : '—'}
@@ -192,16 +194,15 @@ export default function DashboardPage() {
             icon={Database}
             color="purple"
           />
-          <StatCard
-            title={isAdmin ? 'Użytkownicy' : 'SSL aktywne'}
-            value={isAdmin
-              ? (counts?.usersCount != null ? String(counts.usersCount) : '—')
-              : (counts ? String(counts.sslCount) : '—')
-            }
-            subtitle={isAdmin ? 'Klientów + adminów' : 'Certyfikaty aktywne'}
-            icon={isAdmin ? Users : Shield}
-            color="blue"
-          />
+          {isAdmin && (
+            <StatCard
+              title="Użytkownicy"
+              value={counts?.usersCount != null ? String(counts.usersCount) : '—'}
+              subtitle="Klientów + adminów"
+              icon={Users}
+              color="blue"
+            />
+          )}
           <StatCard
             title="Certyfikaty SSL"
             value={counts ? String(counts.sslCount) : '—'}
@@ -214,120 +215,118 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Charts + Resources */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2">
-            <Card className="h-full">
-              <CardHeader>
-                <div className="w-8 h-8 rounded-xl bg-[var(--primary)]/10 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-[var(--primary)]" />
-                </div>
-                <div>
-                  <CardTitle>Użycie CPU & RAM</CardTitle>
-                  <p className="text-[11px] text-[var(--text-muted)]">Aktualizacja co 2 sekundy</p>
-                </div>
-                <div className="ml-auto flex items-center gap-4 text-xs text-[var(--text-secondary)]">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#E91E8C]" />CPU
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#9B26D9]" />RAM
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CpuChart data={history} />
-              </CardContent>
-            </Card>
-          </div>
+        {/* Charts + Resources — admin only */}
+        {isAdmin && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2">
+              <Card className="h-full">
+                <CardHeader>
+                  <div className="w-8 h-8 rounded-xl bg-[var(--primary)]/10 flex items-center justify-center">
+                    <Activity className="w-4 h-4 text-[var(--primary)]" />
+                  </div>
+                  <div>
+                    <CardTitle>Użycie CPU & RAM</CardTitle>
+                    <p className="text-[11px] text-[var(--text-muted)]">Aktualizacja co 2 sekundy</p>
+                  </div>
+                  <div className="ml-auto flex items-center gap-4 text-xs text-[var(--text-secondary)]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#E91E8C]" />CPU
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#9B26D9]" />RAM
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <CpuChart data={history} />
+                </CardContent>
+              </Card>
+            </div>
 
-          <div>
-            <Card className="h-full space-y-5">
-              <CardHeader>
-                <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                  <Cpu className="w-4 h-4 text-purple-400" />
-                </div>
-                <CardTitle>Zasoby serwera</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ResourceGauge label="CPU" value={stats.cpu} detail={`${stats.loadAvg[0].toFixed(2)} avg`} color="pink" />
-                <ResourceGauge
-                  label="RAM"
-                  value={stats.ram.percent}
-                  detail={`${formatBytes(stats.ram.used)} / ${formatBytes(stats.ram.total)}`}
-                  color="purple"
-                />
-                <ResourceGauge
-                  label="Dysk"
-                  value={stats.disk.percent}
-                  detail={`${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)}`}
-                  color="blue"
-                />
+            <div>
+              <Card className="h-full space-y-5">
+                <CardHeader>
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                    <Cpu className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <CardTitle>Zasoby serwera</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <ResourceGauge label="CPU" value={stats.cpu} detail={`${stats.loadAvg[0].toFixed(2)} avg`} color="pink" />
+                  <ResourceGauge
+                    label="RAM"
+                    value={stats.ram.percent}
+                    detail={`${formatBytes(stats.ram.used)} / ${formatBytes(stats.ram.total)}`}
+                    color="purple"
+                  />
+                  <ResourceGauge
+                    label="Dysk"
+                    value={stats.disk.percent}
+                    detail={`${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)}`}
+                    color="blue"
+                  />
 
-                <div className="pt-2 border-t border-white/[0.06] grid grid-cols-2 gap-3">
-                  <div className="glass rounded-xl p-3">
-                    <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1">Upload</p>
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">{formatBytes(stats.network.tx)}/s</p>
+                  <div className="pt-2 border-t border-white/[0.06] grid grid-cols-2 gap-3">
+                    <div className="glass rounded-xl p-3">
+                      <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1">Upload</p>
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">{formatBytes(stats.network.tx)}/s</p>
+                    </div>
+                    <div className="glass rounded-xl p-3">
+                      <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1">Download</p>
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">{formatBytes(stats.network.rx)}/s</p>
+                    </div>
+                    <div className="glass rounded-xl p-3 col-span-2">
+                      <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1">Uptime</p>
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">{formatUptime(stats.uptime)}</p>
+                    </div>
                   </div>
-                  <div className="glass rounded-xl p-3">
-                    <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1">Download</p>
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">{formatBytes(stats.network.rx)}/s</p>
-                  </div>
-                  <div className="glass rounded-xl p-3 col-span-2">
-                    <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1">Uptime</p>
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">{formatUptime(stats.uptime)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Activity + Sites */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className={`grid gap-6 ${isAdmin ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'}`}>
           {/* Activity — admin only */}
-          <Card>
-            <CardHeader>
-              <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-blue-400" />
-              </div>
-              <CardTitle>Ostatnia aktywność</CardTitle>
-              {isAdmin && (
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                </div>
+                <CardTitle>Ostatnia aktywność</CardTitle>
                 <Link href="/settings?tab=audit" className="ml-auto text-xs text-[var(--primary)] hover:opacity-80 transition-opacity">
                   Więcej →
                 </Link>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-1">
-              {!isAdmin ? (
-                <p className="text-sm text-[var(--text-muted)] px-2.5 py-4">
-                  Logi aktywności dostępne tylko dla administratorów.
-                </p>
-              ) : recentActivity.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)] px-2.5 py-4">Brak aktywności.</p>
-              ) : (
-                recentActivity.map((item) => {
-                  const status = actionStatus(item.action)
-                  return (
-                    <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-colors">
-                      {status === 'success' ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-                      ) : status === 'warning' ? (
-                        <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-[var(--text-primary)] font-medium truncate">{actionLabel(item.action)}</p>
-                        <p className="text-xs text-[var(--text-muted)]">{item.user?.name ?? item.resource ?? '—'}</p>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)] px-2.5 py-4">Brak aktywności.</p>
+                ) : (
+                  recentActivity.map((item) => {
+                    const status = actionStatus(item.action)
+                    return (
+                      <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-colors">
+                        {status === 'success' ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                        ) : status === 'warning' ? (
+                          <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-[var(--text-primary)] font-medium truncate">{actionLabel(item.action)}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{item.user?.name ?? item.resource ?? '—'}</p>
+                        </div>
+                        <span className="text-xs text-[var(--text-muted)] flex-shrink-0">{relativeTime(item.createdAt)}</span>
                       </div>
-                      <span className="text-xs text-[var(--text-muted)] flex-shrink-0">{relativeTime(item.createdAt)}</span>
-                    </div>
-                  )
-                })
-              )}
-            </CardContent>
-          </Card>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Sites */}
           <Card>
