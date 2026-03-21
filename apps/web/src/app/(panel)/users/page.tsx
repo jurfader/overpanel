@@ -341,7 +341,7 @@ export default function UsersPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-1 w-16 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1">
                 <Button variant="secondary" size="sm" onClick={() => setResourcesUser(user)} title="Zarządzaj zasobami">
                   <Link2 className="w-4 h-4" />
                 </Button>

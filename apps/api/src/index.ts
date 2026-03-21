@@ -123,6 +123,10 @@ async function bootstrap() {
   const io = new SocketServer(fastify.server, {
     cors: { origin: true, credentials: true },
     path: '/socket.io',
+    transports: ['polling', 'websocket'],
+    allowUpgrades: true,
+    pingTimeout: 30000,
+    pingInterval: 25000,
   })
 
   // Auth guard dla Socket.io
@@ -156,20 +160,27 @@ async function bootstrap() {
   })
 
   terminal.on('connection', (socket) => {
-    const { cols = 80, rows = 24 } = socket.handshake.query as { cols?: number; rows?: number }
+    const qCols = Number(socket.handshake.query['cols']) || 80
+    const qRows = Number(socket.handshake.query['rows']) || 24
 
-    createSession(socket.id, Number(cols), Number(rows)).then((session) => {
+    fastify.log.info(`Terminal connection: ${socket.id} (${qCols}x${qRows})`)
+
+    createSession(socket.id, qCols, qRows).then((session) => {
+      fastify.log.info(`Terminal session created: pid=${session.pid}`)
+
       // Stream PTY output → client
       session.term.onData((data) => {
         socket.emit('data', data)
       })
 
       session.term.onExit(({ exitCode }) => {
+        fastify.log.info(`Terminal exited: code=${exitCode}`)
         socket.emit('exit', exitCode)
         socket.disconnect()
       })
     }).catch((err) => {
-      socket.emit('error', 'Terminal not available: ' + err.message)
+      fastify.log.error(`Terminal session failed: ${err.message}`)
+      socket.emit('data', `\r\n\x1b[31mTerminal error: ${err.message}\x1b[0m\r\n`)
       socket.disconnect()
     })
 

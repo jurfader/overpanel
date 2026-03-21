@@ -105,7 +105,8 @@ export default function TerminalPage() {
           cols: term.cols,
           rows: term.rows,
         },
-        transports: ['websocket'],
+        transports: ['polling', 'websocket'],
+        upgrade: true,
       })
 
       socketRef.current = socket
