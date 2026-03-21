@@ -18,7 +18,6 @@ import {
   Settings,
   LogOut,
   ChevronRight,
-  Box,
   FolderOpen,
   UserCog,
   Container,
@@ -38,7 +37,6 @@ const navItems: NavGroup[] = [
       { href: '/sites', label: 'Strony WWW', icon: Globe, section: 'sites' },
       { href: '/databases', label: 'Bazy danych', icon: Database, section: 'databases' },
       { href: '/ssl', label: 'Certyfikaty SSL', icon: Shield, section: 'ssl' },
-      { href: '/wordpress', label: 'WordPress', icon: Box, section: 'wordpress' },
     ],
   },
   {
