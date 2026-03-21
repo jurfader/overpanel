@@ -56,7 +56,8 @@ async function runLong(command: string, timeout = 600_000): Promise<{ stdout: st
   try {
     return await execAsync(command, { timeout })
   } catch (err: any) {
-    throw new Error(`Command failed: ${command}\n${err.stderr ?? err.message}`)
+    const details = [err.stderr, err.stdout, err.message].filter(Boolean).join('\n')
+    throw new Error(`Command failed: ${command}\n${details}`)
   }
 }
 
@@ -267,7 +268,7 @@ COMPEOF`)
   })
 
   await logStep('Migracja bazy danych (drizzle-kit push)', async () => {
-    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm exec drizzle-kit push --force 2>&1`)
+    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm exec drizzle-kit push`)
   })
 
   // 8. Seed admin user inside the container (has compiled app + access to DB via service name)
