@@ -36,7 +36,7 @@ async function proxyToLicenseServer(
     body: body ? JSON.stringify(body) : undefined,
   })
 
-  const raw = await res.json().catch(() => ({}))
+  const raw: any = await res.json().catch(() => ({}))
   // Wrap in { success, data } format expected by frontend
   if (res.ok) {
     return { status: res.status, data: { success: true, data: raw.data ?? raw } }
