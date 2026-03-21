@@ -242,6 +242,115 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     return reply.send({ success: true, data })
   })
 
+  // GET /api/sites/:id/check-update — sprawdź dostępność aktualizacji CMS
+  fastify.get('/:id/check-update', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const caller = getRequestUser(request)
+    const site = await prisma.site.findUnique({ where: { id } })
+    if (!site) return reply.code(404).send({ success: false, error: 'Not found' })
+    if (caller.role !== 'admin' && site.userId !== caller.id) {
+      return reply.code(403).send({ success: false, error: 'Forbidden' })
+    }
+
+    const { exec: execCb } = await import('child_process')
+    const { promisify } = await import('util')
+    const execAsync = promisify(execCb)
+
+    if (site.hasWordpress) {
+      try {
+        const { stdout } = await execAsync(
+          `wp core check-update --path=${site.documentRoot} --allow-root --format=json 2>/dev/null`
+        )
+        const updates = JSON.parse(stdout.trim() || '[]')
+        const currentVersion = site.wpVersion || 'unknown'
+        if (updates.length > 0) {
+          return reply.send({ success: true, data: { hasUpdate: true, currentVersion, latestVersion: updates[0].version, type: 'wordpress' } })
+        }
+        return reply.send({ success: true, data: { hasUpdate: false, currentVersion, type: 'wordpress' } })
+      } catch {
+        return reply.send({ success: true, data: { hasUpdate: false, type: 'wordpress' } })
+      }
+    }
+
+    if (site.siteType === 'overcms') {
+      const installDir = `/opt/overcms-sites/${site.domain.replace(/[^a-z0-9.-]/g, '')}`
+      try {
+        await execAsync(`cd ${installDir}/app && git fetch origin main 2>/dev/null`)
+        const { stdout } = await execAsync(`cd ${installDir}/app && git log HEAD..origin/main --oneline 2>/dev/null`)
+        const commits = stdout.trim().split('\n').filter(Boolean)
+        const { stdout: currentHash } = await execAsync(`cd ${installDir}/app && git rev-parse --short HEAD`)
+        if (commits.length > 0) {
+          return reply.send({ success: true, data: { hasUpdate: true, commits: commits.length, changes: commits.slice(0, 5), currentVersion: currentHash.trim(), type: 'overcms' } })
+        }
+        return reply.send({ success: true, data: { hasUpdate: false, currentVersion: currentHash.trim(), type: 'overcms' } })
+      } catch {
+        return reply.send({ success: true, data: { hasUpdate: false, type: 'overcms' } })
+      }
+    }
+
+    return reply.send({ success: true, data: { hasUpdate: false, type: null } })
+  })
+
+  // POST /api/sites/:id/update-cms — aktualizuj CMS
+  fastify.post('/:id/update-cms', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const caller = getRequestUser(request)
+    const site = await prisma.site.findUnique({ where: { id } })
+    if (!site) return reply.code(404).send({ success: false, error: 'Not found' })
+    if (caller.role !== 'admin' && site.userId !== caller.id) {
+      return reply.code(403).send({ success: false, error: 'Forbidden' })
+    }
+
+    const { exec: execCb } = await import('child_process')
+    const { promisify } = await import('util')
+    const execAsync = promisify(execCb)
+
+    if (site.hasWordpress) {
+      // WordPress update via existing route logic
+      const { updateWordPress, getWpVersion } = await import('../services/wordpress.js')
+      const { backupSiteFiles } = await import('../services/backup.js')
+      try {
+        await backupSiteFiles(site.domain, site.documentRoot).catch(() => {})
+        const result = await updateWordPress(site.documentRoot)
+        if (result.success) {
+          await prisma.site.update({ where: { id }, data: { wpVersion: result.version } })
+          return reply.send({ success: true, data: { message: `WordPress zaktualizowany do ${result.version}` } })
+        }
+        return reply.code(500).send({ success: false, error: result.error ?? 'Update failed' })
+      } catch (err: any) {
+        return reply.code(500).send({ success: false, error: err.message })
+      }
+    }
+
+    if (site.siteType === 'overcms') {
+      const safeDomain = site.domain.replace(/[^a-z0-9.-]/g, '')
+      const installDir = `/opt/overcms-sites/${safeDomain}`
+      const dc = `cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml`
+
+      reply.code(202).send({ success: true, data: { message: 'Aktualizacja OverCMS w toku...' } })
+
+      setImmediate(async () => {
+        try {
+          await execAsync(`cd ${installDir}/app && git pull origin main`, { timeout: 60_000 })
+          await execAsync(`${dc} up -d --build`, { timeout: 600_000 })
+          // Re-run migration from host
+          const envRaw = await (await import('fs/promises')).readFile(`${installDir}/app/.env`, 'utf-8')
+          const pgPassMatch = envRaw.match(/POSTGRES_PASSWORD=(.+)/)
+          const pgPass = pgPassMatch?.[1]?.trim() ?? ''
+          const portsRaw = await (await import('fs/promises')).readFile(`${installDir}/ports.json`, 'utf-8')
+          const ports = JSON.parse(portsRaw)
+          await execAsync(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPass}@localhost:${ports.pgPort}/overcms pnpm run db:push`, { timeout: 120_000 })
+          console.log(`[OverCMS] Updated ${safeDomain}`)
+        } catch (err: any) {
+          console.error(`[OverCMS] Update failed for ${safeDomain}:`, err.message)
+        }
+      })
+      return
+    }
+
+    return reply.code(400).send({ success: false, error: 'Strona nie ma zainstalowanego CMS' })
+  })
+
   // PATCH /api/sites/:id — edytuj (status, PHP version)
   fastify.patch('/:id', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { id } = request.params as { id: string }

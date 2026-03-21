@@ -8,6 +8,7 @@ import type { Site } from '@overpanel/shared'
 import {
   Globe, Shield, ShieldOff, ExternalLink,
   Trash2, MoreHorizontal, RefreshCw, Power, Settings,
+  ArrowUpCircle, Loader2,
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -123,10 +124,57 @@ function PhpSettingsModal({ siteId, siteDomain, onClose }: { siteId: string; sit
   )
 }
 
+interface UpdateInfo {
+  hasUpdate: boolean
+  type: 'wordpress' | 'overcms' | null
+  currentVersion?: string
+  latestVersion?: string
+  commits?: number
+  changes?: string[]
+}
+
 export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [phpModal, setPhpModal] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updating, setUpdating] = useState(false)
+
+  const hasCms = site.hasWordpress || site.siteType === 'overcms'
+
+  // Check for updates on mount for CMS sites
+  useEffect(() => {
+    if (!hasCms) return
+    checkUpdate()
+  }, [site.id])
+
+  const checkUpdate = async () => {
+    setCheckingUpdate(true)
+    try {
+      const info = await api.get<UpdateInfo>(`/api/sites/${site.id}/check-update`)
+      setUpdateInfo(info)
+    } catch {}
+    setCheckingUpdate(false)
+  }
+
+  const handleUpdate = async () => {
+    if (!confirm(`Zaktualizować CMS na ${site.domain}?`)) return
+    setUpdating(true)
+    try {
+      await api.post(`/api/sites/${site.id}/update-cms`)
+      // For WP it's synchronous, for OverCMS it's async
+      if (site.hasWordpress) {
+        onRefetch()
+      } else {
+        alert('Aktualizacja OverCMS uruchomiona w tle. Docker rebuild może potrwać kilka minut.')
+      }
+      setUpdateInfo(u => u ? { ...u, hasUpdate: false } : u)
+    } catch (err: any) {
+      alert(err.message || 'Błąd podczas aktualizacji')
+    }
+    setUpdating(false)
+  }
 
   const handleDelete = async () => {
     if (!confirm(`Usunąć stronę ${site.domain}? Tej operacji nie można cofnąć.`)) return
@@ -197,6 +245,14 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
           <Badge variant={site.status === 'active' ? 'success' : site.status === 'pending' ? 'warning' : 'error'}>
             {site.status === 'active' ? 'Aktywna' : site.status === 'pending' ? 'Konfigurowanie...' : 'Nieaktywna'}
           </Badge>
+          {updateInfo?.hasUpdate && (
+            <Badge variant="brand">
+              <ArrowUpCircle className="w-3 h-3" />
+              {updateInfo.type === 'wordpress'
+                ? `WP ${updateInfo.latestVersion}`
+                : `${updateInfo.commits} zmian`}
+            </Badge>
+          )}
         </div>
 
         {/* SSL expiry */}
@@ -208,6 +264,20 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-1">
+          {updateInfo?.hasUpdate && (
+            <Button variant="secondary" size="sm" onClick={handleUpdate} loading={updating} title="Aktualizuj CMS">
+              <ArrowUpCircle className="w-4 h-4 text-[var(--primary)]" />
+            </Button>
+          )}
+          {hasCms && !updateInfo?.hasUpdate && (
+            <button
+              onClick={checkUpdate}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+              title="Sprawdź aktualizacje"
+            >
+              {checkingUpdate ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            </button>
+          )}
           {(site.siteType === 'php' || !site.siteType) && (
             <button
               onClick={() => setPhpModal(true)}
