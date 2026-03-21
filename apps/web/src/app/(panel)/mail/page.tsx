@@ -126,12 +126,9 @@ function CreateMailboxModal({
         )}
 
         {domains.length > 1 && (
-          <Select
-            label="Domena"
-            value={domainId}
-            onChange={(e) => setDomainId(e.target.value)}
-            options={domains.map((d) => ({ value: d.id, label: d.domain }))}
-          />
+          <Select label="Domena" value={domainId} onChange={(e) => setDomainId(e.target.value)}>
+            {domains.map((d) => <option key={d.id} value={d.id}>{d.domain}</option>)}
+          </Select>
         )}
 
         <div>
@@ -189,19 +186,14 @@ function CreateMailboxModal({
           </div>
         </div>
 
-        <Select
-          label="Quota"
-          value={quotaMb}
-          onChange={(e) => setQuotaMb(e.target.value)}
-          options={[
-            { value: '100', label: '100 MB' },
-            { value: '250', label: '250 MB' },
-            { value: '500', label: '500 MB' },
-            { value: '1024', label: '1 GB' },
-            { value: '2048', label: '2 GB' },
-            { value: '5120', label: '5 GB' },
-          ]}
-        />
+        <Select label="Quota" value={quotaMb} onChange={(e) => setQuotaMb(e.target.value)}>
+          <option value="100">100 MB</option>
+          <option value="250">250 MB</option>
+          <option value="500">500 MB</option>
+          <option value="1024">1 GB</option>
+          <option value="2048">2 GB</option>
+          <option value="5120">5 GB</option>
+        </Select>
 
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Anuluj</Button>
