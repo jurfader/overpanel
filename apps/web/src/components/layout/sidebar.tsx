@@ -23,6 +23,7 @@ import {
   UserCog,
   Container,
   RefreshCw,
+  Key,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
@@ -60,6 +61,7 @@ const navItems: NavGroup[] = [
     items: [
       { href: '/terminal', label: 'Terminal', icon: Terminal },
       { href: '/users', label: 'Użytkownicy', icon: Users },
+      { href: '/licenses', label: 'Licencje CMS', icon: Key },
       { href: '/settings', label: 'Ustawienia', icon: Settings },
       { href: '/update', label: 'Aktualizacje', icon: RefreshCw },
     ],
