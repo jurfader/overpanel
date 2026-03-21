@@ -167,12 +167,14 @@ export default function TerminalPage() {
   }
 
   useEffect(() => {
+    // Wait for token to be hydrated from localStorage
+    if (!token) return
     connect()
     return () => {
       socketRef.current?.disconnect()
       xtermRef.current?.dispose()
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={`${fullscreen ? 'fixed inset-0 z-50 bg-[#0a0a0f]' : 'min-h-screen'}`}>
