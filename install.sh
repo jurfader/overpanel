@@ -246,10 +246,25 @@ log_step "Instalacja Nginx"
 if systemctl is-active --quiet nginx 2>/dev/null; then
     log_warn "Nginx już działa — pomijam instalację"
 else
+    # Disable Apache if it's running (conflicts with port 80)
+    if systemctl is-active --quiet apache2 2>/dev/null; then
+        log_warn "Apache2 wykryty na porcie 80 — wyłączam..."
+        systemctl stop apache2 > /dev/null 2>&1
+        systemctl disable apache2 > /dev/null 2>&1
+        log_ok "Apache2 wyłączony"
+    fi
+    # Kill anything else on port 80
+    fuser -k 80/tcp > /dev/null 2>&1 || true
+    fuser -k 443/tcp > /dev/null 2>&1 || true
+
     log_info "Instalowanie Nginx..."
     apt-get install -y nginx > /dev/null 2>&1
     systemctl enable nginx > /dev/null 2>&1
-    systemctl start nginx
+    systemctl start nginx || {
+        log_warn "Nginx nie wystartował — sprawdzanie logów..."
+        journalctl -xeu nginx.service --no-pager | tail -5 >&2
+        log_error "Nginx nie mógł wystartować. Sprawdź: journalctl -xeu nginx.service"
+    }
 fi
 
 NGINX_VER=$(nginx -v 2>&1 | awk -F'/' '{print $2}')
