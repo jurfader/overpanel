@@ -1,0 +1,506 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   OVERPANEL Webmail Skin — Dark Glassmorphism Theme
+   Colors: #E91E8C (pink) · #9B26D9 (purple) · #0A0A0F (bg)
+   Extends: Roundcube Elastic
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables ── */
+:root {
+    --op-bg: #0A0A0F;
+    --op-surface: #0E0E1A;
+    --op-surface-2: #141425;
+    --op-surface-glass: rgba(15,15,25,0.85);
+    --op-border: rgba(255,255,255,0.06);
+    --op-border-light: rgba(255,255,255,0.1);
+    --op-text: #e0e0e0;
+    --op-text-muted: #888;
+    --op-text-dim: #555;
+    --op-primary: #E91E8C;
+    --op-primary-dark: #c4177a;
+    --op-secondary: #9B26D9;
+    --op-gradient: linear-gradient(135deg, #E91E8C, #9B26D9);
+    --op-glow: 0 0 20px rgba(233,30,140,0.15);
+    --op-radius: 12px;
+    --op-radius-lg: 16px;
+    --op-radius-xl: 20px;
+
+    /* Roundcube elastic overrides */
+    --color-main: #E91E8C !important;
+    --color-main-dark: #c4177a !important;
+    --color-link: #E91E8C !important;
+    --color-link-hover: #9B26D9 !important;
+    --color-font: #e0e0e0 !important;
+    --color-list-selected-background: rgba(233,30,140,0.1) !important;
+    --color-toolbar-button-background-hover: rgba(233,30,140,0.12) !important;
+    --color-border: rgba(255,255,255,0.06) !important;
+    --color-black-shade-bg: #0A0A0F !important;
+    --color-layout-border: rgba(255,255,255,0.06) !important;
+    --color-layout-header-background: rgba(12,12,20,0.98) !important;
+    --color-layout-sidebar-background: rgba(10,10,18,0.98) !important;
+    --color-layout-list-background: #0E0E1A !important;
+    --color-layout-content-background: #101020 !important;
+    --color-input-border: rgba(255,255,255,0.1) !important;
+    --color-input-border-focus: rgba(233,30,140,0.5) !important;
+    --color-checkbox: #E91E8C !important;
+    --color-checkbox-checked: #E91E8C !important;
+    --color-checkbox-checked-disabled: rgba(233,30,140,0.4) !important;
+    --color-message-unread: #f0f0f0 !important;
+    --color-list-border: rgba(255,255,255,0.03) !important;
+    --color-datepicker-selected: #E91E8C !important;
+    --color-warning: #fbbf24 !important;
+    --color-error: #ef4444 !important;
+    --color-success: #22c55e !important;
+}
+
+html { color-scheme: dark !important; }
+
+/* ── Base ── */
+body, html {
+    background: var(--op-bg) !important;
+    color: var(--op-text) !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+/* ── Layout ── */
+#layout {
+    background: var(--op-bg) !important;
+}
+#layout > div {
+    border-color: var(--op-border) !important;
+}
+
+/* ── Taskmenu (left icon bar) ── */
+#taskmenu {
+    background: rgba(8,8,14,0.98) !important;
+    border-right: 1px solid var(--op-border) !important;
+    padding: 8px 0 !important;
+}
+#taskmenu a {
+    color: var(--op-text-muted) !important;
+    border-radius: var(--op-radius) !important;
+    margin: 2px 6px !important;
+    transition: all 0.2s ease !important;
+}
+#taskmenu a::before {
+    color: var(--op-text-muted) !important;
+    transition: color 0.2s ease !important;
+}
+#taskmenu a:hover {
+    background: rgba(255,255,255,0.04) !important;
+    color: var(--op-text) !important;
+}
+#taskmenu a:hover::before {
+    color: var(--op-text) !important;
+}
+#taskmenu a.selected {
+    background: rgba(233,30,140,0.1) !important;
+    color: var(--op-primary) !important;
+    box-shadow: inset 3px 0 0 var(--op-primary) !important;
+}
+#taskmenu a.selected::before {
+    color: var(--op-primary) !important;
+}
+
+/* ── Header ── */
+.header, #layout > .header {
+    background: rgba(12,12,20,0.95) !important;
+    border-bottom: 1px solid var(--op-border) !important;
+    backdrop-filter: blur(12px) !important;
+}
+
+/* ── Sidebar (folders) ── */
+#layout-sidebar, .layout-sidebar, #mailboxcontainer {
+    background: rgba(10,10,18,0.98) !important;
+    border-right: 1px solid var(--op-border) !important;
+}
+.folderlist li a, .treelist li a,
+.folderlist li div.treetoggle + a, .treelist li div.treetoggle + a {
+    color: var(--op-text-muted) !important;
+    border-radius: 8px !important;
+    padding: 6px 10px !important;
+    transition: all 0.15s ease !important;
+}
+.folderlist li a:hover, .treelist li a:hover {
+    background: rgba(255,255,255,0.03) !important;
+    color: var(--op-text) !important;
+}
+.folderlist li.selected > a, .treelist li.selected > a,
+.folderlist li.selected > div > a {
+    background: rgba(233,30,140,0.08) !important;
+    color: var(--op-primary) !important;
+    font-weight: 500 !important;
+}
+.folderlist li .unreadcount, .treelist li .unreadcount {
+    background: var(--op-primary) !important;
+    color: #fff !important;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    min-width: 18px !important;
+    padding: 1px 5px !important;
+}
+
+/* ── Message List ── */
+#layout-list, .layout-list {
+    background: var(--op-surface) !important;
+}
+.messagelist {
+    background: transparent !important;
+}
+.messagelist tr {
+    border-bottom: 1px solid rgba(255,255,255,0.025) !important;
+    transition: background 0.15s ease !important;
+}
+.messagelist tr td {
+    color: var(--op-text-muted) !important;
+    background: transparent !important;
+    padding: 10px 8px !important;
+}
+.messagelist tr.unread td {
+    color: #e8e8e8 !important;
+}
+.messagelist tr.unread td .subject a,
+.messagelist tr.unread td.subject a {
+    color: #f0f0f0 !important;
+    font-weight: 600 !important;
+}
+.messagelist tr td .subject a,
+.messagelist tr td.subject a {
+    color: #b0b0b0 !important;
+}
+.messagelist tr.selected td {
+    background: rgba(233,30,140,0.08) !important;
+}
+.messagelist tr.focused td {
+    border-color: var(--op-primary) !important;
+}
+.messagelist tr:hover td {
+    background: rgba(255,255,255,0.02) !important;
+}
+.messagelist tr td .date, .messagelist td.date {
+    color: var(--op-text-dim) !important;
+}
+.messagelist tr td .fromto, .messagelist td.fromto {
+    color: var(--op-text-muted) !important;
+}
+.messagelist thead tr td, .messagelist thead th {
+    background: rgba(10,10,18,0.95) !important;
+    color: var(--op-text-dim) !important;
+    border-bottom: 1px solid var(--op-border) !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    font-size: 10px !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* ── Content / Message View ── */
+#layout-content, .layout-content {
+    background: var(--op-surface-2) !important;
+}
+.messageheaderbox, #messageheader {
+    background: rgba(15,15,25,0.9) !important;
+    border-bottom: 1px solid var(--op-border) !important;
+    backdrop-filter: blur(8px) !important;
+}
+.messageheaderbox td.header, .header-title {
+    color: var(--op-text-muted) !important;
+}
+.messageheaderbox td.header-title {
+    color: var(--op-text-dim) !important;
+    text-transform: uppercase !important;
+    font-size: 10px !important;
+    letter-spacing: 0.5px !important;
+}
+#messagecontframe {
+    background: var(--op-surface-2) !important;
+}
+
+/* ── Toolbar ── */
+.toolbar, .menu.toolbar {
+    background: rgba(12,12,20,0.95) !important;
+    border-bottom: 1px solid var(--op-border) !important;
+    backdrop-filter: blur(12px) !important;
+}
+.toolbar a.button {
+    color: var(--op-text-muted) !important;
+    border-radius: 10px !important;
+    transition: all 0.15s ease !important;
+}
+.toolbar a.button::before {
+    color: var(--op-text-muted) !important;
+    transition: color 0.15s ease !important;
+}
+.toolbar a.button:hover {
+    background: rgba(233,30,140,0.1) !important;
+    color: var(--op-primary) !important;
+}
+.toolbar a.button:hover::before {
+    color: var(--op-primary) !important;
+}
+.toolbar a.button.disabled {
+    opacity: 0.3 !important;
+}
+.toolbar .spacer, .toolbar .separator {
+    border-color: var(--op-border) !important;
+}
+
+/* ── Buttons ── */
+a.button.create, .btn-primary, button.btn-primary, input.mainaction,
+.formbuttons input.mainaction, .formbuttons .mainaction,
+input[type="submit"].mainaction {
+    background: var(--op-gradient) !important;
+    border: none !important;
+    color: #fff !important;
+    border-radius: var(--op-radius) !important;
+    text-shadow: none !important;
+    font-weight: 600 !important;
+    padding: 10px 24px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: var(--op-glow) !important;
+    letter-spacing: 0.3px !important;
+}
+a.button.create:hover, .btn-primary:hover, button.btn-primary:hover {
+    opacity: 0.92 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 20px rgba(233,30,140,0.25) !important;
+}
+.btn-secondary, button.btn-secondary, .btn-default, button.btn-default {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid var(--op-border-light) !important;
+    color: var(--op-text) !important;
+    border-radius: var(--op-radius) !important;
+    transition: all 0.15s ease !important;
+}
+.btn-secondary:hover, .btn-default:hover {
+    background: rgba(255,255,255,0.08) !important;
+}
+.btn-danger, button.btn-danger {
+    background: rgba(239,68,68,0.15) !important;
+    border: 1px solid rgba(239,68,68,0.3) !important;
+    color: #ef4444 !important;
+    border-radius: var(--op-radius) !important;
+}
+
+/* ── Inputs ── */
+input[type="text"], input[type="password"], input[type="email"], input[type="search"],
+input[type="url"], input[type="number"], input[type="tel"],
+textarea, select, .form-control, .custom-select {
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid var(--op-border-light) !important;
+    border-radius: var(--op-radius) !important;
+    color: var(--op-text) !important;
+    transition: all 0.2s ease !important;
+    padding: 10px 14px !important;
+}
+input:focus, textarea:focus, select:focus, .form-control:focus {
+    border-color: rgba(233,30,140,0.5) !important;
+    box-shadow: 0 0 0 3px rgba(233,30,140,0.08) !important;
+    background: rgba(255,255,255,0.05) !important;
+    outline: none !important;
+}
+.input-group { border-radius: var(--op-radius) !important; }
+
+/* ── Login Page ── */
+body.login-page #layout,
+body.login-page {
+    background: var(--op-bg) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+#login-form {
+    background: var(--op-surface-glass) !important;
+    border: 1px solid var(--op-border-light) !important;
+    border-radius: var(--op-radius-xl) !important;
+    backdrop-filter: blur(20px) !important;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5), var(--op-glow) !important;
+    max-width: 400px !important;
+    width: 100% !important;
+    padding: 40px !important;
+}
+#login-form table { width: 100% !important; }
+#login-form td { padding: 6px 0 !important; }
+#login-form td.title {
+    color: var(--op-primary) !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+    padding-bottom: 4px !important;
+}
+#login-form .box-inner { color: var(--op-text-muted) !important; }
+#login-form input[type="text"],
+#login-form input[type="password"] {
+    width: 100% !important;
+    padding: 12px 16px !important;
+    font-size: 14px !important;
+}
+#login-form .formbuttons {
+    padding: 16px 0 0 !important;
+}
+#login-form input[type="submit"],
+#login-form .btn {
+    background: var(--op-gradient) !important;
+    border: none !important;
+    border-radius: 14px !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    padding: 14px !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    box-shadow: var(--op-glow) !important;
+    transition: all 0.2s ease !important;
+}
+#login-form input[type="submit"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(233,30,140,0.3) !important;
+}
+/* Custom logo on login */
+#login-form #logo,
+#login-form .logo {
+    filter: brightness(0) invert(1) !important;
+    opacity: 0.5 !important;
+}
+
+/* ── Dialogs / Popups ── */
+.ui-dialog, .popupmenu, .dropdown-menu,
+.ui-autocomplete {
+    background: rgba(15,15,25,0.95) !important;
+    border: 1px solid var(--op-border-light) !important;
+    border-radius: var(--op-radius-lg) !important;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important;
+    backdrop-filter: blur(16px) !important;
+}
+.ui-dialog .ui-dialog-titlebar {
+    background: transparent !important;
+    border-bottom: 1px solid var(--op-border) !important;
+    color: #f0f0f0 !important;
+}
+.ui-dialog .ui-dialog-title { color: #f0f0f0 !important; }
+.popupmenu ul li a, .dropdown-menu a {
+    color: var(--op-text) !important;
+    border-radius: 8px !important;
+    margin: 1px 4px !important;
+    padding: 8px 12px !important;
+    transition: all 0.15s ease !important;
+}
+.popupmenu ul li a:hover, .dropdown-menu a:hover {
+    background: rgba(233,30,140,0.08) !important;
+    color: var(--op-primary) !important;
+}
+
+/* ── Compose ── */
+#composebody, .mce-content-body {
+    background: var(--op-surface-2) !important;
+    color: var(--op-text) !important;
+}
+.tox .tox-toolbar, .tox .tox-toolbar__primary,
+.tox .tox-toolbar__overflow, .mce-toolbar {
+    background: rgba(12,12,20,0.95) !important;
+    border-color: var(--op-border) !important;
+}
+.tox .tox-tbtn, .mce-btn {
+    color: var(--op-text-muted) !important;
+}
+.tox .tox-tbtn:hover, .mce-btn:hover {
+    background: rgba(233,30,140,0.1) !important;
+}
+
+/* ── Settings / Preferences ── */
+.formcontent, .propform, .preferences-table {
+    background: transparent !important;
+}
+.formcontent .form-group, fieldset {
+    border-color: var(--op-border) !important;
+}
+legend { color: var(--op-primary) !important; font-weight: 600 !important; }
+
+/* ── Contacts ── */
+.contactlist tr td, .contactlist .name {
+    color: var(--op-text) !important;
+}
+.contactlist tr.selected td {
+    background: rgba(233,30,140,0.08) !important;
+}
+.contactphoto { border-radius: 50% !important; }
+
+/* ── Scrollbar ── */
+* {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(233,30,140,0.2) transparent !important;
+}
+::-webkit-scrollbar { width: 5px !important; height: 5px !important; }
+::-webkit-scrollbar-track { background: transparent !important; }
+::-webkit-scrollbar-thumb {
+    background: rgba(233,30,140,0.2) !important;
+    border-radius: 3px !important;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(233,30,140,0.4) !important;
+}
+
+/* ── Typography ── */
+h1, h2, h3, h4, h5, .boxtitle { color: #f0f0f0 !important; }
+label { color: #b0b0b0 !important; }
+a { color: var(--op-primary) !important; text-decoration: none !important; }
+a:hover { color: var(--op-secondary) !important; }
+.hint, .formcontent .hint, .form-text { color: var(--op-text-dim) !important; }
+.countdisplay { color: var(--op-text-dim) !important; }
+
+/* ── Navigation ── */
+.boxpagenav a, .pagenav a { color: var(--op-text-muted) !important; }
+.boxpagenav a:hover, .pagenav a:hover { color: var(--op-primary) !important; }
+hr, .boxpagenav { border-color: var(--op-border) !important; }
+
+/* ── Lists ── */
+.listing li, .listing tr, .listing td {
+    border-color: rgba(255,255,255,0.025) !important;
+}
+.listing li a, .listing li span { color: var(--op-text) !important; }
+.listing li.selected, .listing li.selected > a,
+.listing tr.selected td {
+    background: rgba(233,30,140,0.08) !important;
+}
+
+/* ── Tags / Badges ── */
+.tag, .badge {
+    border-radius: 8px !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    padding: 2px 8px !important;
+}
+
+/* ── Search bar ── */
+.searchbar, #quicksearchbar {
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid var(--op-border) !important;
+    border-radius: var(--op-radius) !important;
+}
+.searchbar input, #quicksearchbar input {
+    background: transparent !important;
+    border: none !important;
+    color: var(--op-text) !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    #taskmenu {
+        border-right: none !important;
+        border-top: 1px solid var(--op-border) !important;
+    }
+    #layout-sidebar {
+        border-right: none !important;
+    }
+}
+
+/* ── Branding ── */
+.minmodetoggle::after {
+    content: "OVERPANEL" !important;
+    color: var(--op-primary) !important;
+    font-weight: 800 !important;
+    font-size: 10px !important;
+    letter-spacing: 2px !important;
+}

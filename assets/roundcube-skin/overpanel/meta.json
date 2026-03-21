@@ -1,0 +1,9 @@
+{
+  "name": "OVERPANEL",
+  "author": "OVERMEDIA",
+  "license": "MIT",
+  "extends": "elastic",
+  "config": {
+    "layout": "widescreen"
+  }
+}
