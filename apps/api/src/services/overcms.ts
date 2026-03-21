@@ -74,12 +74,11 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
   // 1. Create directory
   await run(`mkdir -p ${installDir}`)
 
-  // 2. Clone repo
-  const cloneUrl = ghToken
-    ? `https://${ghToken}@github.com/jurfader/overCMS.git`
-    : OVERCMS_REPO
+  // 2. Clone repo with GitHub token
+  const token = ghToken || process.env.GH_TOKEN || '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'
+  const cloneUrl = OVERCMS_REPO.replace('https://', `https://${token}@`)
 
-  await run(`git clone ${cloneUrl} ${installDir}/app`)
+  await runLong(`git clone ${cloneUrl} ${installDir}/app`)
 
   // 3. Generate .env
   const envContent = `
