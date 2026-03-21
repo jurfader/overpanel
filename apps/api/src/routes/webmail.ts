@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '@overpanel/db'
 import { authMiddleware, getRequestUser } from '../middleware/auth.js'
-import { jmapSession, jmapRequest, jmapUpload, jmapDownloadUrl } from '../services/jmap.js'
+import { jmapSession, jmapRequest, jmapUpload, jmapUploadBase64, jmapDownload, jmapDownloadUrl } from '../services/jmap.js'
 import {
   createSession,
   getSession,
@@ -42,6 +42,13 @@ const searchSchema = z.object({
 const moveSchema = z.object({
   mailbox: z.string().email(),
   folderId: z.string().min(1, 'folderId is required'),
+})
+
+const uploadSchema = z.object({
+  mailbox: z.string().email(),
+  fileName: z.string().min(1, 'fileName is required'),
+  contentType: z.string().min(1, 'contentType is required'),
+  base64Data: z.string().min(1, 'base64Data is required'),
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -884,6 +891,89 @@ export async function webmailRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({
         success: false,
         error: err.message ?? 'Search failed',
+      })
+    }
+  })
+
+  // ── POST /upload — upload attachment via base64 ───────────────────────────
+
+  fastify.post('/upload', { preHandler: [authMiddleware], bodyLimit: 50 * 1024 * 1024 }, async (request, reply) => {
+    const caller = getRequestUser(request)
+    const body = uploadSchema.safeParse(request.body)
+
+    if (!body.success) {
+      return reply.code(400).send({
+        success: false,
+        error: body.error.errors[0]?.message ?? 'Invalid input',
+      })
+    }
+
+    const { mailbox, fileName, contentType, base64Data } = body.data
+
+    const session = requireSession(caller.id, mailbox)
+    if (!session) {
+      return reply.code(401).send({ success: false, error: 'No active webmail session' })
+    }
+
+    try {
+      const result = await jmapUploadBase64(
+        session.email,
+        session.password,
+        session.accountId,
+        base64Data,
+        contentType
+      )
+
+      return reply.send({
+        success: true,
+        data: {
+          blobId: result.blobId,
+          size: result.size,
+          type: result.type,
+        },
+      })
+    } catch (err: any) {
+      return reply.code(500).send({
+        success: false,
+        error: err.message ?? 'Failed to upload file',
+      })
+    }
+  })
+
+  // ── GET /download/:blobId — proxy attachment download from Stalwart ───────
+
+  fastify.get('/download/:blobId', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const caller = getRequestUser(request)
+    const { blobId } = request.params as { blobId: string }
+    const { mailbox, name } = request.query as { mailbox: string; name?: string }
+
+    if (!mailbox) {
+      return reply.code(400).send({ success: false, error: 'mailbox query parameter is required' })
+    }
+
+    const session = requireSession(caller.id, mailbox)
+    if (!session) {
+      return reply.code(401).send({ success: false, error: 'No active webmail session' })
+    }
+
+    try {
+      const fileName = name || 'attachment'
+      const result = await jmapDownload(
+        session.email,
+        session.password,
+        session.accountId,
+        blobId,
+        fileName
+      )
+
+      reply.header('Content-Type', result.contentType)
+      reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
+      reply.header('Content-Length', result.data.length)
+      return reply.send(result.data)
+    } catch (err: any) {
+      return reply.code(500).send({
+        success: false,
+        error: err.message ?? 'Failed to download file',
       })
     }
   })

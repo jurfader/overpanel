@@ -7,8 +7,9 @@ import { FolderSidebar, type WebmailFolder } from '@/components/webmail/folder-s
 import { MessageList, type MessageSummary } from '@/components/webmail/message-list'
 import { MessageView, type FullMessage } from '@/components/webmail/message-view'
 import { ComposeModal } from '@/components/webmail/compose-modal'
+import { SignatureSettings } from '@/components/webmail/signature-settings'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, LogOut, RefreshCw } from 'lucide-react'
+import { ArrowLeft, LogOut, RefreshCw, Settings } from 'lucide-react'
 
 const PAGE_SIZE = 50
 
@@ -34,6 +35,9 @@ export default function WebmailInboxPage() {
   const [composeOpen, setComposeOpen] = useState(false)
   const [replyTo, setReplyTo] = useState<FullMessage | null>(null)
   const [forwardMessage, setForwardMessage] = useState<FullMessage | null>(null)
+
+  // Signature settings modal state
+  const [signatureOpen, setSignatureOpen] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(totalMessages / PAGE_SIZE))
 
@@ -212,6 +216,9 @@ export default function WebmailInboxPage() {
           <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{mailbox}</p>
           <p className="text-[10px] text-[var(--text-muted)]">Webmail</p>
         </div>
+        <Button variant="ghost" size="sm" onClick={() => setSignatureOpen(true)} title="Ustawienia">
+          <Settings className="w-4 h-4" />
+        </Button>
         <Button variant="ghost" size="sm" onClick={fetchMessages} title="Odswiez">
           <RefreshCw className="w-4 h-4" />
         </Button>
@@ -280,6 +287,7 @@ export default function WebmailInboxPage() {
           ) : fullMessage ? (
             <MessageView
               message={fullMessage}
+              mailbox={mailbox}
               onReply={handleReply}
               onReplyAll={handleReplyAll}
               onForward={handleForward}
@@ -314,6 +322,15 @@ export default function WebmailInboxPage() {
           mailbox={mailbox}
           replyTo={replyTo}
           forwardMessage={forwardMessage}
+        />
+      )}
+
+      {/* Signature settings modal */}
+      {signatureOpen && (
+        <SignatureSettings
+          open={signatureOpen}
+          onClose={() => setSignatureOpen(false)}
+          mailbox={mailbox}
         />
       )}
     </div>

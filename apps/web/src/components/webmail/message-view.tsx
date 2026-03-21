@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Reply, ReplyAll, Forward, Trash2, Flag,
-  ArrowLeft, Paperclip, Download,
+  ArrowLeft, Paperclip, Download, Loader2,
 } from 'lucide-react'
 
 interface EmailAddress {
@@ -42,6 +42,7 @@ interface MessageViewProps {
   onDelete: () => void
   onFlag: () => void
   onBack: () => void
+  mailbox: string
 }
 
 function formatFullDate(dateStr: string): string {
@@ -71,6 +72,8 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+const API_URL = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || '') : ''
+
 export function MessageView({
   message,
   onReply,
@@ -79,8 +82,10 @@ export function MessageView({
   onDelete,
   onFlag,
   onBack,
+  mailbox,
 }: MessageViewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [downloadingBlobId, setDownloadingBlobId] = useState<string | null>(null)
 
   // Render HTML content in iframe
   useEffect(() => {
@@ -125,6 +130,32 @@ export function MessageView({
   }, [message.htmlBody, message.textBody])
 
   const hasAttachments = message.attachments && message.attachments.length > 0
+
+  const handleDownload = async (att: Attachment) => {
+    setDownloadingBlobId(att.blobId)
+    try {
+      const url = `${API_URL}/api/webmail/download/${encodeURIComponent(att.blobId)}?mailbox=${encodeURIComponent(mailbox)}&name=${encodeURIComponent(att.name)}`
+      const response = await fetch(url, { credentials: 'include' })
+
+      if (!response.ok) {
+        throw new Error('Nie udalo sie pobrac pliku')
+      }
+
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = att.name || 'attachment'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      console.error('Download failed:', err)
+    } finally {
+      setDownloadingBlobId(null)
+    }
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -197,14 +228,21 @@ export function MessageView({
           </div>
           <div className="flex flex-wrap gap-2">
             {message.attachments!.map((att) => (
-              <div
+              <button
                 key={att.blobId}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs hover:bg-white/[0.06] transition-colors cursor-pointer"
+                type="button"
+                onClick={() => handleDownload(att)}
+                disabled={downloadingBlobId === att.blobId}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs hover:bg-white/[0.06] hover:border-[var(--primary)]/30 transition-all cursor-pointer group disabled:opacity-60"
               >
-                <Download className="w-3 h-3 text-[var(--text-muted)]" />
+                {downloadingBlobId === att.blobId ? (
+                  <Loader2 className="w-3 h-3 text-[var(--primary)] animate-spin" />
+                ) : (
+                  <Download className="w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
+                )}
                 <span className="text-[var(--text-secondary)] truncate max-w-[150px]">{att.name}</span>
                 <span className="text-[var(--text-muted)]">{formatFileSize(att.size)}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>

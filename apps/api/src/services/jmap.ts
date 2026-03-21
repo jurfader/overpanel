@@ -177,6 +177,92 @@ export async function jmapUpload(
   }
 }
 
+// ── JMAP Upload from Base64 ──────────────────────────────────────────────────
+
+export async function jmapUploadBase64(
+  email: string,
+  password: string,
+  accountId: string,
+  base64Data: string,
+  contentType: string
+): Promise<{ blobId: string; size: number; type: string }> {
+  const { writeFileSync, unlinkSync, mkdtempSync } = await import('fs')
+  const { join } = await import('path')
+  const { tmpdir } = await import('os')
+
+  // Write base64 data to a temp file
+  const tmpDir = mkdtempSync(join(tmpdir(), 'jmap-upload-'))
+  const tmpFile = join(tmpDir, 'upload.bin')
+
+  try {
+    const buffer = Buffer.from(base64Data, 'base64')
+    writeFileSync(tmpFile, buffer)
+
+    // Use the existing upload function
+    return await jmapUpload(email, password, accountId, tmpFile, contentType)
+  } finally {
+    // Cleanup temp file
+    try {
+      unlinkSync(tmpFile)
+      const { rmdirSync } = await import('fs')
+      rmdirSync(tmpDir)
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+// ── JMAP Download (proxy) ───────────────────────────────────────────────────
+
+export async function jmapDownload(
+  email: string,
+  password: string,
+  accountId: string,
+  blobId: string,
+  name: string
+): Promise<{ data: Buffer; contentType: string }> {
+  const baseUrl = await getStalwartUrl()
+  const auth = basicAuth(email, password)
+  const { run } = await import('./shell.js')
+
+  const downloadPath = `/jmap/download/${accountId}/${encodeURIComponent(blobId)}/${encodeURIComponent(name)}`
+  const url = `${baseUrl}${downloadPath}`
+
+  // Download to a temp file to handle binary data properly
+  const { mkdtempSync } = await import('fs')
+  const { join } = await import('path')
+  const { tmpdir } = await import('os')
+
+  const tmpDir = mkdtempSync(join(tmpdir(), 'jmap-download-'))
+  const tmpFile = join(tmpDir, 'download.bin')
+
+  try {
+    const cmd = [
+      'curl', '-sk',
+      '-H', `"Authorization: Basic ${auth}"`,
+      '-o', tmpFile,
+      '-w', '"%{content_type}"',
+      `"${url}"`,
+    ].join(' ')
+
+    const result = await run(cmd)
+    const contentType = result.stdout.trim().replace(/^"|"$/g, '') || 'application/octet-stream'
+
+    const { readFileSync } = await import('fs')
+    const data = readFileSync(tmpFile)
+
+    return { data, contentType }
+  } finally {
+    try {
+      const { unlinkSync, rmdirSync } = await import('fs')
+      unlinkSync(tmpFile)
+      rmdirSync(tmpDir)
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
 // ── JMAP Download URL ───────────────────────────────────────────────────────
 
 export function jmapDownloadUrl(accountId: string, blobId: string, name: string): string {
