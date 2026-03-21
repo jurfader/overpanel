@@ -815,6 +815,40 @@ if [[ -n "${CF_API_TOKEN}" ]] && command -v cloudflared &>/dev/null; then
         # Check if panel domain is already configured
         if grep -q "${PANEL_DOMAIN}" "$CF_CONFIG" 2>/dev/null; then
             log_warn "Domena ${PANEL_DOMAIN} już istnieje w konfiguracji tunelu"
+
+            # Ask if user wants to update/fix the entry
+            UPDATE_CF="n"
+            read -r -p "  Czy zaktualizować wpis dla ${PANEL_DOMAIN} (np. poprawić port → 3333)? [y/N]: " UPDATE_CF
+            if [[ "${UPDATE_CF,,}" == "y" ]]; then
+                # Remove existing lines for this domain (hostname line + service line below it)
+                sed -i "/hostname: ${PANEL_DOMAIN}/,+1d" "$CF_CONFIG"
+                # Also remove if written as "hostname:DOMAIN" (no space)
+                sed -i "/hostname:${PANEL_DOMAIN}/,+1d" "$CF_CONFIG"
+
+                # Now insert fresh entry
+                PANEL_INGRESS="  - hostname: ${PANEL_DOMAIN}\n    service: http://localhost:3333"
+                if grep -q "http_status:404\|http_status: 404" "$CF_CONFIG"; then
+                    sed -i "s|.*http_status:404.*|${PANEL_INGRESS}\n  - service: http_status:404|" "$CF_CONFIG"
+                elif grep -q "^ingress:" "$CF_CONFIG"; then
+                    echo -e "${PANEL_INGRESS}" >> "$CF_CONFIG"
+                else
+                    printf '\ningress:\n%s\n  - service: http_status:404\n' "$(echo -e "${PANEL_INGRESS}")" >> "$CF_CONFIG"
+                fi
+
+                log_ok "Zaktualizowano wpis ${PANEL_DOMAIN} → http://localhost:3333"
+
+                systemctl restart cloudflared 2>/dev/null \
+                    || systemctl restart cloudflared.service 2>/dev/null \
+                    || true
+                sleep 2
+                if systemctl is-active --quiet cloudflared 2>/dev/null; then
+                    log_ok "Cloudflare Tunnel zrestartowany"
+                else
+                    log_warn "Cloudflare Tunnel nie zrestartowany — uruchom ręcznie: systemctl restart cloudflared"
+                fi
+            else
+                log_info "Pominięto aktualizację konfiguracji tunelu"
+            fi
         else
             # Build ingress entry for panel
             PANEL_INGRESS="  - hostname: ${PANEL_DOMAIN}\n    service: http://localhost:3333"
