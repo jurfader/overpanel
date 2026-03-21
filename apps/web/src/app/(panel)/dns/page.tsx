@@ -48,7 +48,8 @@ export default function DnsPage() {
   const [editForm, setEditForm] = useState({ type: 'A', name: '', content: '', ttl: 3600, proxied: true })
   const [savingEdit, setSavingEdit] = useState(false)
 
-  const hasToken = (tokens ?? []).length > 0
+  // Token exists if user has DB tokens OR if zones loaded (env var fallback works)
+  const hasToken = (tokens ?? []).length > 0 || (zones !== undefined && zones !== null && !zonesError)
 
   const loadRecords = async (zone: CfZone) => {
     setSelectedZone(zone)

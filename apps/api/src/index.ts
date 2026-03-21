@@ -51,7 +51,7 @@ async function bootstrap() {
   await fastify.register(helmet, { contentSecurityPolicy: false })
 
   await fastify.register(cors, {
-    origin: FRONTEND_URL,
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   })
@@ -121,7 +121,7 @@ async function bootstrap() {
 
   // Socket.io korzysta z tego samego serwera HTTP co Fastify
   const io = new SocketServer(fastify.server, {
-    cors: { origin: FRONTEND_URL, credentials: true },
+    cors: { origin: true, credentials: true },
     path: '/socket.io',
   })
 

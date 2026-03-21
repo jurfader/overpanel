@@ -686,6 +686,31 @@ bcrypt.hash('${ADMIN_PASSWORD}', 12).then(hash => {
 " 2>/dev/null && log_ok "Użytkownik admin '${ADMIN_EMAIL}' utworzony/zaktualizowany" \
     || log_warn "Nie można utworzyć admina — uruchom ręcznie: node -e \"...\" (patrz dokumentacja)"
 
+# --- Save CF API token to database (if provided) ---
+if [[ -n "${CF_API_TOKEN}" ]]; then
+    log_info "Zapisywanie tokenu Cloudflare do bazy danych..."
+    node -e "
+const { PrismaClient } = require(require.resolve('@prisma/client', { paths: ['${INSTALL_DIR}/packages/db'] }));
+const p = new PrismaClient({ datasources: { db: { url: 'file:${INSTALL_DIR}/packages/db/panel.db' } } });
+(async () => {
+  const admin = await p.user.findFirst({ where: { role: 'admin' } });
+  if (!admin) { console.log('No admin found'); process.exit(0); }
+  await p.cloudflareToken.upsert({
+    where: { id: 'install-token' },
+    update: { token: '${CF_API_TOKEN}', isDefault: true },
+    create: { id: 'install-token', label: 'Instalacja', token: '${CF_API_TOKEN}', userId: admin.id, isDefault: true }
+  });
+  console.log('OK');
+  await p.\$disconnect();
+})().catch(e => { console.error(e.message); process.exit(1); });
+" 2>/dev/null && log_ok "Token Cloudflare zapisany" \
+    || log_warn "Nie udało się zapisać tokenu CF do bazy"
+fi
+
+# --- Create web root directory ---
+mkdir -p /var/www
+chown www-data:www-data /var/www 2>/dev/null || true
+
 # --- Build apps ---
 log_info "Budowanie @overpanel/api..."
 pnpm --filter "@overpanel/api" build 2>&1 | tail -5 || \

@@ -231,9 +231,13 @@ export default function UsersPage() {
   }
 
   const handleDelete = async (user: UserRecord) => {
-    if (!confirm(`Usunąć użytkownika ${user.email}?`)) return
-    await api.delete(`/api/users/${user.id}`)
-    refetch()
+    if (!confirm(`Usunąć użytkownika ${user.email}? Zostaną usunięte wszystkie jego strony, bazy danych i inne zasoby.`)) return
+    try {
+      await api.delete(`/api/users/${user.id}`)
+      refetch()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Nie można usunąć użytkownika')
+    }
   }
 
   return (
