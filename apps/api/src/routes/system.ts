@@ -201,6 +201,7 @@ export async function systemRoutes(fastify: FastifyInstance) {
         ['git pull', `git -C ${repoDir} pull origin main`],
         ['pnpm install', `cd ${repoDir} && pnpm install --no-frozen-lockfile`],
         ['prisma generate', `cd ${repoDir}/packages/db && npx prisma generate`],
+        ['prisma db push', `cd ${repoDir}/packages/db && npx prisma db push --skip-generate --accept-data-loss 2>&1 || true`],
         ['build packages', `cd ${repoDir} && pnpm --filter @overpanel/shared build && pnpm --filter @overpanel/db build`],
         ['build api', `cd ${repoDir} && pnpm --filter @overpanel/api build`],
         ['build web', `cd ${repoDir}/apps/web && pnpm build`],
