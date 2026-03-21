@@ -109,9 +109,9 @@ export async function updateStalwartPassword(
   email: string,
   newPassword: string
 ): Promise<void> {
-  await stalwartApi(`/api/principal/${encodeURIComponent(email)}`, 'PATCH', {
-    secrets: [newPassword],
-  })
+  await stalwartApi(`/api/principal/${encodeURIComponent(email)}`, 'PATCH', [
+    { action: 'set', field: 'secrets', value: [newPassword] },
+  ])
 }
 
 export async function deleteStalwartAccount(email: string): Promise<void> {
