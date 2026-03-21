@@ -105,14 +105,18 @@ export async function installWordPress(opts: WpInstallOptions): Promise<WpInstal
 
     await run(installCmd)
 
-    // 4. Remove default content
+    // 4. Force HTTPS URLs (Cloudflare tunnel provides SSL)
+    await run(`wp option update siteurl ${sq(siteUrl)} --allow-root --path=${safePath}`).catch(() => {})
+    await run(`wp option update home ${sq(siteUrl)} --allow-root --path=${safePath}`).catch(() => {})
+
+    // 5. Remove default content
     await run(`wp post delete 1 2 --force --allow-root --path=${safePath}`).catch(() => {})
     await run(`wp comment delete 1 --force --allow-root --path=${safePath}`).catch(() => {})
 
-    // 5. Set correct file permissions
+    // 6. Set correct file permissions
     await run(`chown -R www-data:www-data ${safePath}`)
 
-    // 6. Get version
+    // 7. Get version
     const version = await getWpVersion(documentRoot)
 
     return { success: true, version }
