@@ -114,7 +114,13 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
       log.push(`✓ ${step}`)
       await writeInstallStatus(domain, { status: 'running', step, log, startedAt })
     } catch (err: any) {
-      log.push(`✗ ${step}: ${err.message}`)
+      // Show meaningful error detail in log
+      const msg = err.message || String(err)
+      const lines = msg.split('\n').filter((l: string) => l.trim())
+      for (const line of lines.slice(0, 10)) {
+        log.push(`  ${line}`)
+      }
+      log.push(`✗ ${step}`)
       await writeInstallStatus(domain, { status: 'failed', step, log, startedAt, completedAt: new Date().toISOString() })
       throw err
     }

@@ -19,6 +19,7 @@ async function getUserCfToken(userId: string): Promise<string | null> {
 const createSiteSchema = z.object({
   domain: z.string().min(3).regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain'),
   siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms']).default('php'),
+  adminEmail: z.string().email().optional(),
   adminPassword: z.string().optional(),
   licenseKey: z.string().optional(),
   phpVersion: z.enum(['7.4', '8.0', '8.1', '8.2', '8.3']).default('8.3'),
@@ -119,13 +120,14 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         }
 
         // 2b. OverCMS installation
+        let overcmsOk = true
         if (siteType === 'overcms') {
           try {
             const { installOverCms } = await import('../services/overcms.js')
             const { createNginxOverCmsProxy } = await import('../services/nginx.js')
             const result = await installOverCms({
               domain,
-              adminEmail: caller.email || 'admin@' + domain,
+              adminEmail: body.data.adminEmail || caller.email || 'admin@' + domain,
               adminPassword: body.data.adminPassword || 'Admin123!',
               licenseKey: body.data.licenseKey,
               ghToken: process.env.GH_TOKEN,
@@ -134,7 +136,11 @@ export async function sitesRoutes(fastify: FastifyInstance) {
             await reloadNginx()
             console.log(`[OverCMS] Installed for ${domain}: API=${result.apiPort}, Admin=${result.adminPort}`)
           } catch (err: any) {
+            overcmsOk = false
             console.error(`[OverCMS] Install failed for ${domain}:`, err.message)
+            // Don't proceed with tunnel/DNS — no nginx vhost exists
+            await prisma.site.update({ where: { id: site.id }, data: { status: 'inactive' } })
+            return
           }
         }
 
