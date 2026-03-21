@@ -263,12 +263,8 @@ COMPEOF`)
   })
 
   // 7. Run database migration from host (source schema .ts files not in prod container)
-  await logStep('Instalacja zależności (pnpm install)', async () => {
-    await runLong(`cd ${installDir}/app && pnpm install 2>&1`, 300_000)
-  })
-
-  await logStep('Migracja bazy danych (drizzle-kit push)', async () => {
-    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm run db:push`)
+  await logStep('Migracja bazy danych', async () => {
+    await runLong(`cd ${installDir}/app && NODE_ENV=development pnpm install 2>&1 && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm run db:push`, 300_000)
   })
 
   // 8. Seed admin user inside the container (has compiled app + access to DB via service name)
