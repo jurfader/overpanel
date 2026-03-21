@@ -207,6 +207,8 @@ const SECTION_LABELS: Record<string, string> = {
   ssl: 'Certyfikaty SSL',
   wordpress: 'WordPress',
   dns: 'DNS / Cloudflare',
+  mail: 'Poczta e-mail',
+  webmail: 'Webmail',
   docker: 'Docker',
   files: 'Menedżer plików',
   ftp: 'FTP / SFTP',
