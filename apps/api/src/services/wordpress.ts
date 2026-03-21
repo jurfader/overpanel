@@ -89,6 +89,25 @@ export async function installWordPress(opts: WpInstallOptions): Promise<WpInstal
 
     await run(configCmd)
 
+    // 2b. Add reverse proxy HTTPS detection to wp-config.php
+    const httpsSnippet = `
+/* HTTPS behind reverse proxy (Cloudflare Tunnel / nginx) */
+if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+    $_SERVER['HTTPS'] = 'on';
+}
+`
+    await run(`wp config set FORCE_SSL_ADMIN true --raw --allow-root --path=${safePath}`).catch(() => {})
+    // Insert snippet after <?php in wp-config.php
+    const wpConfigPath = `${documentRoot}/wp-config.php`
+    try {
+      const { readFile: rf, writeFile: wf } = await import('fs/promises')
+      let wpConfig = await rf(wpConfigPath, 'utf-8')
+      if (!wpConfig.includes('HTTP_X_FORWARDED_PROTO')) {
+        wpConfig = wpConfig.replace('<?php', '<?php' + httpsSnippet)
+        await wf(wpConfigPath, wpConfig, 'utf-8')
+      }
+    } catch {}
+
     // 3. Run WordPress install
     const siteUrl = `https://${safeDomain}`
     const installCmd = [
