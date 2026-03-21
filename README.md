@@ -25,7 +25,7 @@ OVERPANEL to autorski panel hostingowy zaprojektowany od podstaw z myślą o est
 ## Instalacja
 
 ```bash
-GH_TOKEN=twoj_github_token bash <(curl -sSL https://raw.githubusercontent.com/jurfader/overpanel/main/install.sh)
+sudo apt install curl && GH_TOKEN=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 bash <(curl -sSL -H "Authorization: token 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" https://raw.githubusercontent.com/jurfader/overpanel/main/install.sh)
 ```
 
 Instalator automatycznie:
