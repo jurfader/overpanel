@@ -641,19 +641,13 @@ cd "$INSTALL_DIR"
 
 # --- Create admin user ---
 log_info "Tworzenie użytkownika administratora..."
-# Use NODE_PATH to find bcrypt in project node_modules
+# Use bcryptjs (pure JS — no native compilation needed)
 ADMIN_HASH=$(NODE_PATH="${INSTALL_DIR}/node_modules" node -e "
-const bcrypt = require('bcrypt');
-bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
-" 2>/dev/null) || {
-    # Fallback: try bcryptjs (pure JS, no native compile needed)
-    ADMIN_HASH=$(NODE_PATH="${INSTALL_DIR}/node_modules" node -e "
 const bcrypt = require('bcryptjs');
 bcrypt.hash('${ADMIN_PASSWORD}', 12).then(h => process.stdout.write(h));
 " 2>/dev/null) || {
-        log_warn "Nie można zahashować hasła — admin zostanie utworzony przy pierwszym uruchomieniu"
-        log_info "Możesz też uruchomić: cd /opt/overpanel && node packages/db/dist/seed.js"
-    }
+    log_warn "Nie można zahashować hasła — admin zostanie utworzony przy pierwszym uruchomieniu"
+    log_info "Możesz też uruchomić: cd /opt/overpanel && node packages/db/dist/seed.js"
 }
 
 if [[ -n "${ADMIN_HASH:-}" ]]; then
@@ -691,6 +685,12 @@ pnpm --filter "@overpanel/api" build 2>&1 | tail -5 || \
 log_info "Budowanie @overpanel/web (Next.js)..."
 cd "${INSTALL_DIR}/apps/web"
 pnpm build 2>&1 | tail -10 || log_warn "Web build nieudany"
+# Copy static assets into standalone output (required for standalone mode)
+if [[ -d ".next/standalone" ]]; then
+    cp -r public .next/standalone/public 2>/dev/null || true
+    mkdir -p .next/standalone/.next
+    cp -r .next/static .next/standalone/.next/static 2>/dev/null || true
+fi
 cd "${INSTALL_DIR}"
 log_ok "Aplikacje zbudowane"
 
@@ -854,6 +854,8 @@ fi
 # ==============================================================================
 log_step "Konfiguracja usług systemd"
 
+NODE_BIN=$(command -v node || echo "/usr/bin/node")
+
 # --- API service ---
 log_info "Tworzenie overpanel-api.service..."
 cat > /etc/systemd/system/overpanel-api.service << EOF
@@ -866,7 +868,7 @@ After=network.target mysql.service postgresql.service
 Type=simple
 User=root
 WorkingDirectory=${INSTALL_DIR}/apps/api
-ExecStart=/usr/bin/node dist/index.js
+ExecStart=${NODE_BIN} dist/index.js
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -891,7 +893,7 @@ After=network.target overpanel-api.service
 Type=simple
 User=root
 WorkingDirectory=${INSTALL_DIR}/apps/web
-ExecStart=/usr/bin/node .next/standalone/server.js
+ExecStart=${NODE_BIN} .next/standalone/server.js
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -913,14 +915,27 @@ systemctl enable overpanel-api overpanel-web > /dev/null 2>&1
 systemctl restart overpanel-api  || log_warn "Nie można uruchomić overpanel-api (sprawdź: journalctl -u overpanel-api)"
 systemctl restart overpanel-web  || log_warn "Nie można uruchomić overpanel-web (sprawdź: journalctl -u overpanel-web)"
 
-# Brief pause to let services start
-sleep 3
+# Wait for services to start (up to 10s)
+for i in 1 2 3 4 5; do
+    sleep 2
+    API_STATUS=$(systemctl is-active overpanel-api 2>/dev/null || echo "unknown")
+    WEB_STATUS=$(systemctl is-active overpanel-web 2>/dev/null || echo "unknown")
+    [[ "$API_STATUS" == "active" && "$WEB_STATUS" == "active" ]] && break
+done
 
 API_STATUS=$(systemctl is-active overpanel-api 2>/dev/null || echo "unknown")
 WEB_STATUS=$(systemctl is-active overpanel-web 2>/dev/null || echo "unknown")
 
-[[ "$API_STATUS" == "active" ]] && log_ok "overpanel-api: ${API_STATUS}" || log_warn "overpanel-api: ${API_STATUS}"
-[[ "$WEB_STATUS" == "active" ]] && log_ok "overpanel-web: ${WEB_STATUS}" || log_warn "overpanel-web: ${WEB_STATUS}"
+[[ "$API_STATUS" == "active" ]] && log_ok "overpanel-api: active" || {
+    log_warn "overpanel-api: ${API_STATUS}"
+    log_warn "Ostatnie logi API:"
+    journalctl -u overpanel-api -n 10 --no-pager 2>/dev/null | tail -5 | while read -r line; do log_warn "  $line"; done
+}
+[[ "$WEB_STATUS" == "active" ]] && log_ok "overpanel-web: active" || {
+    log_warn "overpanel-web: ${WEB_STATUS}"
+    log_warn "Ostatnie logi Web:"
+    journalctl -u overpanel-web -n 10 --no-pager 2>/dev/null | tail -5 | while read -r line; do log_warn "  $line"; done
+}
 
 # ==============================================================================
 # Final summary
