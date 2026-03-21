@@ -302,15 +302,12 @@ else
     # Create fastcgi-php.conf snippet (required for PHP vhosts)
     if [[ ! -f /etc/nginx/snippets/fastcgi-php.conf ]]; then
         cat > /etc/nginx/snippets/fastcgi-php.conf << 'SNIPPET'
-location ~ \.php$ {
-    fastcgi_split_path_info ^(.+?\.php)(/.*)$;
-    if (!-f $document_root$fastcgi_script_name) {
-        return 404;
-    }
-    include fastcgi_params;
-    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    fastcgi_param PATH_INFO $fastcgi_path_info;
-}
+fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+set $path_info $fastcgi_path_info;
+try_files $fastcgi_script_name =404;
+include fastcgi_params;
+fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+fastcgi_param PATH_INFO $path_info;
 SNIPPET
         log_ok "Utworzono /etc/nginx/snippets/fastcgi-php.conf"
     fi
