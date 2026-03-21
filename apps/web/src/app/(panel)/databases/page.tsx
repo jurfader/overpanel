@@ -201,7 +201,7 @@ export default function DatabasesPage() {
           <div className="flex items-center gap-4 px-4 py-3 border-b border-white/[0.06] text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">
             <span className="w-8" />
             <span className="flex-1">Nazwa</span>
-            <span className="hidden md:block w-32">Silnik</span>
+            <span className="hidden md:block w-44">Silnik</span>
             <span className="hidden lg:block w-32">Przypisana do</span>
             <span className="hidden xl:block w-24">Rozmiar</span>
             <span className="w-20" />
@@ -240,7 +240,7 @@ export default function DatabasesPage() {
               </div>
 
               {/* Engine */}
-              <div className="hidden md:flex w-32 items-center gap-1.5">
+              <div className="hidden md:flex w-44 items-center gap-1.5">
                 <Badge variant={db.engine === 'mysql' ? 'warning' : 'info'}>
                   {db.engine === 'mysql' ? 'MySQL 8.0' : 'PostgreSQL 16'}
                 </Badge>
