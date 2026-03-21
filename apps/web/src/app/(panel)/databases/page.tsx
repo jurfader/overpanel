@@ -12,7 +12,7 @@ import { useAuthStore } from '@/store/auth'
 import { api } from '@/lib/api'
 import type { Database } from '@overpanel/shared'
 import { formatBytes, formatDate } from '@/lib/utils'
-import { Database as DbIcon, Plus, RefreshCw, Trash2, Download, Server, Upload } from 'lucide-react'
+import { Database as DbIcon, Plus, RefreshCw, Trash2, Download, Server, Upload, ExternalLink, Container } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 
 type DbWithSite = Database & { site?: { domain: string } }
@@ -143,6 +143,15 @@ export default function DatabasesPage() {
     refetch()
   }
 
+  const handleAdminer = async (db: DbWithSite) => {
+    try {
+      const result = await api.get<{ url: string }>(`/api/databases/${db.id}/adminer-url`)
+      window.open(result.url, '_blank')
+    } catch {
+      alert('Nie udało się otworzyć Adminer. Hasło niedostępne dla tej bazy.')
+    }
+  }
+
   const handleDump = async (db: DbWithSite) => {
     setDumping(db.id)
     try {
@@ -231,10 +240,15 @@ export default function DatabasesPage() {
               </div>
 
               {/* Engine */}
-              <div className="hidden md:block w-32">
+              <div className="hidden md:flex w-32 items-center gap-1.5">
                 <Badge variant={db.engine === 'mysql' ? 'warning' : 'info'}>
                   {db.engine === 'mysql' ? 'MySQL 8.0' : 'PostgreSQL 16'}
                 </Badge>
+                {db.isDocker && (
+                  <Badge variant="brand">
+                    <Container className="w-3 h-3" /> Docker
+                  </Badge>
+                )}
               </div>
 
               {/* Site */}
@@ -249,10 +263,13 @@ export default function DatabasesPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="secondary" size="sm" onClick={() => handleAdminer(db)} title="Otwórz w Adminer">
+                  <ExternalLink className="w-4 h-4" />
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => handleDump(db)} loading={dumping === db.id} title="Eksport SQL">
                   <Download className="w-4 h-4" />
                 </Button>
-                {db.engine === 'mysql' && (
+                {db.engine === 'mysql' && !db.isDocker && (
                   <Button variant="secondary" size="sm" onClick={() => setImportDb(db)} title="Import SQL">
                     <Upload className="w-4 h-4" />
                   </Button>

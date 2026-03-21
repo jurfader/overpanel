@@ -135,6 +135,32 @@ export async function sitesRoutes(fastify: FastifyInstance) {
             await createNginxOverCmsProxy({ domain, apiPort: result.apiPort, adminPort: result.adminPort })
             await reloadNginx()
             console.log(`[OverCMS] Installed for ${domain}: API=${result.apiPort}, Admin=${result.adminPort}`)
+
+            // Save Docker PostgreSQL in panel's database list
+            try {
+              const { readFile } = await import('fs/promises')
+              const portsRaw = await readFile(`/opt/overcms-sites/${domain}/ports.json`, 'utf-8')
+              const ports = JSON.parse(portsRaw)
+              const envRaw = await readFile(`/opt/overcms-sites/${domain}/app/.env`, 'utf-8')
+              const pgPassMatch = envRaw.match(/POSTGRES_PASSWORD=(.+)/)
+              const pgPass = pgPassMatch?.[1]?.trim() ?? ''
+
+              await prisma.database.create({
+                data: {
+                  name: `overcms_${domain.replace(/[^a-z0-9]/g, '_')}`,
+                  engine: 'postgresql',
+                  dbUser: 'overcms',
+                  host: 'localhost',
+                  port: ports.pgPort,
+                  userId: ownerId,
+                  siteId: site.id,
+                  isDocker: true,
+                  password: pgPass,
+                },
+              })
+            } catch (dbErr: any) {
+              console.warn(`[OverCMS] Failed to register Docker DB:`, dbErr.message)
+            }
           } catch (err: any) {
             overcmsOk = false
             console.error(`[OverCMS] Install failed for ${domain}:`, err.message)

@@ -72,6 +72,7 @@ export interface Database {
   siteId: string | null
   userId: string
   sizeMb: number
+  isDocker: boolean
   createdAt: string
   updatedAt: string
 }

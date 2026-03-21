@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { createHmac } from 'crypto'
 import { prisma } from '@overpanel/db'
 import { authMiddleware, getRequestUser } from '../middleware/auth.js'
 import { createMysqlDatabase, dropMysqlDatabase, dumpMysqlDatabase } from '../services/mysql.js'
@@ -73,10 +74,13 @@ export async function databasesRoutes(fastify: FastifyInstance) {
       return reply.code(403).send({ success: false, error: 'Forbidden' })
     }
 
-    if (db.engine === 'mysql') {
-      await dropMysqlDatabase(db.name, db.dbUser)
-    } else {
-      await dropPgDatabase(db.name, db.dbUser)
+    // Docker databases live in containers — don't try to drop native DB
+    if (!db.isDocker) {
+      if (db.engine === 'mysql') {
+        await dropMysqlDatabase(db.name, db.dbUser)
+      } else {
+        await dropPgDatabase(db.name, db.dbUser)
+      }
     }
 
     await prisma.database.delete({ where: { id } })
@@ -120,6 +124,41 @@ export async function databasesRoutes(fastify: FastifyInstance) {
     }
 
     return reply.send({ success: true, data: { message: 'Import zakończony' } })
+  })
+
+  // GET /api/databases/:id/adminer-url — generate signed auto-login URL
+  fastify.get('/:id/adminer-url', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const caller = getRequestUser(request)
+    const db = await prisma.database.findUnique({ where: { id } })
+    if (!db) return reply.code(404).send({ success: false, error: 'Not found' })
+    if (caller.role !== 'admin' && db.userId !== caller.id) {
+      return reply.code(403).send({ success: false, error: 'Forbidden' })
+    }
+
+    let password: string | null = null
+    if (db.isDocker && db.password) {
+      password = db.password
+    } else if (caller.role === 'admin') {
+      password = db.engine === 'mysql'
+        ? (process.env.MYSQL_ROOT_PASSWORD ?? '')
+        : ''
+    }
+    if (!password) {
+      return reply.code(400).send({ success: false, error: 'Hasło niedostępne dla tej bazy' })
+    }
+
+    const driver = db.engine === 'mysql' ? 'server' : 'pgsql'
+    const server = `localhost:${db.port}`
+    const payload = JSON.stringify({
+      driver, server, username: db.dbUser, password, db: db.name,
+      exp: Date.now() + 5 * 60 * 1000,
+    })
+    const secret = process.env.JWT_SECRET ?? 'overpanel-dev-secret'
+    const hmac = createHmac('sha256', secret).update(payload).digest('hex')
+    const token = Buffer.from(payload).toString('base64url') + '.' + hmac
+
+    return reply.send({ success: true, data: { url: `/adminer/autologin.php?token=${token}` } })
   })
 
   // POST /api/databases/:id/dump — eksport SQL

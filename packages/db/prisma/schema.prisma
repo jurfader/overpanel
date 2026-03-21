@@ -77,6 +77,8 @@ model Database {
   host      String   @default("localhost")
   port      Int
   sizeMb    Float    @default(0)
+  isDocker  Boolean  @default(false)
+  password  String?  // stored for Docker DBs (panel-managed) for Adminer auto-login
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

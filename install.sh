@@ -512,6 +512,76 @@ WP_VER=$(wp --version --allow-root 2>/dev/null || echo "niedostępny")
 log_ok "WP-CLI: ${WP_VER}"
 
 # ==============================================================================
+# STEP 10b: Install Adminer (database management)
+# ==============================================================================
+log_step "Instalacja Adminer"
+
+ADMINER_DIR="/opt/overpanel/adminer"
+mkdir -p "$ADMINER_DIR"
+
+if [ -f "${ADMINER_DIR}/adminer.php" ]; then
+    log_ok "Adminer już zainstalowany — pomijam"
+else
+    log_info "Pobieranie Adminer..."
+    curl -sS -o "${ADMINER_DIR}/adminer.php" \
+      "https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php" 2>/dev/null
+    log_ok "Adminer pobrany"
+fi
+
+# Create auto-login wrapper
+cat > "${ADMINER_DIR}/autologin.php" << 'ADMINEREOF'
+<?php
+// Auto-login wrapper for Adminer — OVERPANEL
+// Token is HMAC-signed JSON from the API
+
+// Read JWT_SECRET from API env
+$envFile = '/opt/overpanel/.env';
+if (!file_exists($envFile)) $envFile = '/opt/overpanel/apps/api/.env';
+$envContent = file_exists($envFile) ? file_get_contents($envFile) : '';
+preg_match('/JWT_SECRET="?([^"\n]+)"?/', $envContent, $m);
+$jwtSecret = trim($m[1] ?? 'overpanel-dev-secret');
+
+$token = $_GET['token'] ?? '';
+if (!$token) { http_response_code(400); die('Missing token'); }
+
+$parts = explode('.', $token, 2);
+if (count($parts) !== 2) { http_response_code(400); die('Invalid token format'); }
+
+$payload = base64_decode(strtr($parts[0], '-_', '+/'));
+$expectedHmac = hash_hmac('sha256', $payload, $jwtSecret);
+
+if (!hash_equals($expectedHmac, $parts[1])) { http_response_code(403); die('Invalid signature'); }
+
+$data = json_decode($payload, true);
+if (!$data || ($data['exp'] ?? 0) < round(microtime(true) * 1000)) {
+    http_response_code(403); die('Token expired');
+}
+
+// Adminer auto-login via plugin
+function adminer_object() {
+    global $data;
+    class AutoLogin extends Adminer {
+        private $d;
+        function __construct($d) { $this->d = $d; }
+        function credentials() {
+            return [$this->d['server'], $this->d['username'], $this->d['password']];
+        }
+        function login($login, $password) { return true; }
+        function database() { return $this->d['db']; }
+    }
+    return new AutoLogin($data);
+}
+
+$_GET[$data['driver']] = $data['server'];
+$_GET['username'] = $data['username'];
+$_GET['db'] = $data['db'];
+
+include __DIR__ . '/adminer.php';
+ADMINEREOF
+
+log_ok "Adminer autologin wrapper utworzony"
+
+# ==============================================================================
 # STEP 11: Install Certbot + UFW firewall
 # ==============================================================================
 log_step "Instalacja Certbot + konfiguracja UFW"
@@ -836,6 +906,17 @@ server {
         proxy_set_header   Host       $host;
         proxy_set_header   X-Real-IP  $remote_addr;
         proxy_cache_bypass $http_upgrade;
+    }
+
+    # Adminer — database management (PHP)
+    location /adminer/ {
+        alias /opt/overpanel/adminer/;
+        index autologin.php;
+        location ~ \.php$ {
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME /opt/overpanel/adminer/$fastcgi_script_name;
+            include fastcgi_params;
+        }
     }
 
     # Frontend — Next.js (port 3333)
