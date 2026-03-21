@@ -1,53 +1,58 @@
 /**
  * Stalwart Mail Server REST API wrapper
  * Manages domains, accounts, and DKIM via the Stalwart management API.
+ * Supports both local and remote Stalwart instances (e.g. mail VPS).
  */
 
 import { prisma } from '@overpanel/db'
 
-const STALWART_API_URL = process.env.STALWART_API_URL || 'http://localhost:8461'
+// ── Config helper ────────────────────────────────────────────────────────────
 
-// ── Auth helper ──────────────────────────────────────────────────────────────
+async function getStalwartConfig(): Promise<{ url: string; user: string; password: string }> {
+  const settings = await prisma.setting.findMany({
+    where: { key: { in: ['mail_stalwart_url', 'mail_stalwart_token'] } },
+  })
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]))
 
-async function getStalwartToken(): Promise<string> {
-  const row = await prisma.setting.findUnique({ where: { key: 'mail_stalwart_token' } })
-  if (!row?.value) {
-    throw new Error('Stalwart API token not configured (mail_stalwart_token)')
-  }
-  return row.value
+  const url = map['mail_stalwart_url'] || process.env.STALWART_API_URL || 'https://localhost:443'
+  const password = map['mail_stalwart_token']
+  if (!password) throw new Error('Stalwart admin password not configured (mail_stalwart_token)')
+
+  return { url: url.replace(/\/$/, ''), user: 'admin', password }
 }
 
-async function stalwartFetch(
-  path: string,
-  options?: RequestInit
-): Promise<Response> {
-  const token = await getStalwartToken()
-  const res = await fetch(`${STALWART_API_URL}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  })
+async function stalwartFetch(path: string, options?: RequestInit): Promise<Response> {
+  const { url, user, password } = await getStalwartConfig()
+  const auth = Buffer.from(`${user}:${password}`).toString('base64')
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Stalwart API error ${res.status} on ${path}: ${text}`)
+  // Use shell curl for HTTPS with self-signed certs (fetch rejects them)
+  const { run } = await import('./shell.js')
+
+  const method = options?.method ?? 'GET'
+  const body = options?.body ? `-d ${JSON.stringify(String(options.body))}` : ''
+  const contentType = options?.body ? `-H "Content-Type: application/json"` : ''
+
+  const cmd = `curl -sk -X ${method} -H "Authorization: Basic ${auth}" ${contentType} ${body} "${url}${path}"`
+  const result = await run(cmd)
+
+  // Parse response
+  const text = result.stdout.trim()
+  if (text.includes('"status":4') || text.includes('"status":5')) {
+    throw new Error(`Stalwart API error on ${path}: ${text}`)
   }
 
-  return res
+  return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json' } })
 }
 
 // ── Status ───────────────────────────────────────────────────────────────────
 
 export async function isStalwartRunning(): Promise<boolean> {
   try {
-    const token = await getStalwartToken()
-    const res = await fetch(`${STALWART_API_URL}/api/domain`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    return res.ok
+    const { url, user, password } = await getStalwartConfig()
+    const auth = Buffer.from(`${user}:${password}`).toString('base64')
+    const { run } = await import('./shell.js')
+    const result = await run(`curl -sk -o /dev/null -w "%{http_code}" -H "Authorization: Basic ${auth}" "${url}/api/domain"`)
+    return result.stdout.trim() === '200'
   } catch {
     return false
   }
