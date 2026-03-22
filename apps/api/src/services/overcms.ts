@@ -16,6 +16,7 @@ import { readFile } from 'fs/promises'
 const execAsync = promisify(exec)
 
 const OVERCMS_REPO = 'https://github.com/jurfader/over-cms.git'
+export const OVERCMS_GH_TOKEN = process.env.GH_TOKEN ?? ''
 const OVERCMS_BASE_DIR = '/opt/overcms-sites'
 const INSTALL_STATUS_DIR = '/tmp'
 
@@ -137,7 +138,8 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
 
   // 2. Clone repo with GitHub token
   await logStep('Klonowanie repozytorium OverCMS', async () => {
-    const token = ghToken || process.env.GH_TOKEN || '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'
+    const token = ghToken || OVERCMS_GH_TOKEN
+    if (!token) throw new Error('GH_TOKEN not configured — set it in overpanel-api systemd service')
     const cloneUrl = OVERCMS_REPO.replace('https://', `https://${token}@`)
     await runLong(`git clone ${cloneUrl} ${installDir}/app`)
   })

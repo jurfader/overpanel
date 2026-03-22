@@ -277,11 +277,8 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       const installDir = `/opt/overcms-sites/${safeDomain}`
       try {
         // Build authenticated fetch URL; x-access-token:<PAT> works without TTY prompt
-        const ghToken = process.env.GH_TOKEN
-        const remoteUrl = ghToken
-          ? `https://x-access-token:${ghToken}@github.com/jurfader/over-cms.git`
-          : (await execAsync(`git -C ${installDir}/app remote get-url origin`, { timeout: 5_000 })).stdout.trim()
-            .replace(/^https:\/\/([^:@]+)@/, 'https://x-access-token:$1@') // fix stored token format
+        const { OVERCMS_GH_TOKEN } = await import('../services/overcms.js')
+        const remoteUrl = `https://x-access-token:${OVERCMS_GH_TOKEN}@github.com/jurfader/over-cms.git`
 
         await execAsync(`git -C ${installDir}/app fetch ${remoteUrl} main`, {
           timeout: 30_000,
@@ -343,11 +340,8 @@ export async function sitesRoutes(fastify: FastifyInstance) {
 
       setImmediate(async () => {
         try {
-          const ghToken = process.env.GH_TOKEN
-          const pullUrl = ghToken
-            ? `https://x-access-token:${ghToken}@github.com/jurfader/over-cms.git`
-            : (await execAsync(`git -C ${installDir}/app remote get-url origin`)).stdout.trim()
-              .replace(/^https:\/\/([^:@]+)@/, 'https://x-access-token:$1@')
+          const { OVERCMS_GH_TOKEN } = await import('../services/overcms.js')
+          const pullUrl = `https://x-access-token:${OVERCMS_GH_TOKEN}@github.com/jurfader/over-cms.git`
           const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' }
           await execAsync(`git -C ${installDir}/app fetch ${pullUrl} main && git -C ${installDir}/app reset --hard FETCH_HEAD`, { timeout: 60_000, env: gitEnv })
           await execAsync(`${dc} up -d --build`, { timeout: 600_000 })
