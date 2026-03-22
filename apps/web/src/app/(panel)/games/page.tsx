@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Topbar } from '@/components/layout/topbar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -85,6 +86,7 @@ function getCategoryColor(cat: string): 'info' | 'success' | 'warning' | 'brand'
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function GameServersPage() {
+  const router = useRouter()
   const [tab, setTab] = useState<'servers' | 'catalog'>('servers')
   const [toasts, setToasts] = useState<Toast[]>([])
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
@@ -298,7 +300,11 @@ export default function GameServersPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {installedServers.map(server => (
-                  <Card key={server.shortName} className="group hover:border-white/15 transition-all">
+                  <Card
+                    key={server.shortName}
+                    className="group hover:border-white/15 transition-all cursor-pointer"
+                    onClick={() => router.push(`/games/${server.shortName}`)}
+                  >
                     <CardContent>
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -345,7 +351,7 @@ export default function GameServersPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                         {!server.running ? (
                           <Button
                             size="sm"
