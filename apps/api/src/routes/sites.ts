@@ -131,7 +131,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
               adminPassword: body.data.adminPassword || 'Admin123!',
               licenseKey: body.data.licenseKey,
             })
-            await createNginxOverCmsProxy({ domain, apiPort: result.apiPort, adminPort: result.adminPort })
+            await createNginxOverCmsProxy({ domain, apiPort: result.apiPort, adminPort: result.adminPort, portalPort: result.portalPort })
             await reloadNginx()
             console.log(`[OverCMS] Installed for ${domain}: API=${result.apiPort}, Admin=${result.adminPort}`)
 

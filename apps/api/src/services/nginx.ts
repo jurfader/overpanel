@@ -155,9 +155,10 @@ interface OverCmsProxyOptions {
   domain: string
   apiPort: number
   adminPort: number
+  portalPort: number
 }
 
-export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: OverCmsProxyOptions): Promise<void> {
+export async function createNginxOverCmsProxy({ domain, apiPort, adminPort, portalPort }: OverCmsProxyOptions): Promise<void> {
   const safeDomain = esc(domain)
 
   const config = `server {
@@ -167,7 +168,7 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: Ov
 
     client_max_body_size 50M;
 
-    # API
+    # API backend
     location /api/ {
         proxy_pass http://127.0.0.1:${apiPort};
         proxy_http_version 1.1;
@@ -179,8 +180,8 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: Ov
         client_max_body_size 50M;
     }
 
-    # Admin panel
-    location / {
+    # Admin panel (/admin path)
+    location /admin {
         proxy_pass http://127.0.0.1:${adminPort};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -192,9 +193,18 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: Ov
         proxy_cache_bypass $http_upgrade;
     }
 
-    # Security headers
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options SAMEORIGIN;
+    # Public website (portal)
+    location / {
+        proxy_pass http://127.0.0.1:${portalPort};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_cache_bypass $http_upgrade;
+    }
 }
 `
 

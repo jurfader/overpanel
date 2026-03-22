@@ -81,6 +81,7 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
   adminUrl: string
   apiPort: number
   adminPort: number
+  portalPort: number
 }> {
   const { domain, adminEmail, adminPassword, licenseKey } = options
   const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
@@ -221,9 +222,11 @@ services:
         NEXT_PUBLIC_API_URL: https://${domain}
     ports:
       - "${adminPort}:3001"
-  license-server:
-    profiles: ["disabled"]
   portal:
+    container_name: overcms-portal-${containerPrefix}
+    ports:
+      - "${portalPort}:3004"
+  license-server:
     profiles: ["disabled"]
   traefik:
     profiles: ["disabled"]
@@ -283,6 +286,7 @@ EOF`)
     adminUrl: `http://localhost:${adminPort}`,
     apiPort,
     adminPort,
+    portalPort,
   }
 }
 
