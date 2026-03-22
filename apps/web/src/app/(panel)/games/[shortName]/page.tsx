@@ -34,6 +34,9 @@ import {
   Gamepad2,
   ExternalLink,
   X,
+  Eye,
+  EyeOff,
+  Wifi,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -50,6 +53,8 @@ interface ServerInfo {
   running: boolean
   pid?: number
   maxRam?: number | null
+  ftpUser?: string | null
+  ftpPassword?: string | null
 }
 
 interface ConfigData {
@@ -176,6 +181,10 @@ export default function GameServerManagePage() {
   const [editingRam, setEditingRam] = useState(false)
   const [ramValue, setRamValue] = useState<number>(2048)
   const [savingRam, setSavingRam] = useState(false)
+
+  // FTP password visibility
+  const [ftpPasswordVisible, setFtpPasswordVisible] = useState(false)
+  const [ftpCopied, setFtpCopied] = useState<string | null>(null)
 
   // Server info
   const { data: serverInfo, loading: serverLoading, refetch: refetchServer } = useApi<ServerInfo>(
@@ -859,6 +868,7 @@ export default function GameServerManagePage() {
 
         {/* ── Files tab ──────────────────────────────────────────────────────── */}
         {tab === 'files' && (
+          <div className="space-y-4">
           <Card>
             <CardContent>
               {/* Header: breadcrumb + actions */}
@@ -908,7 +918,7 @@ export default function GameServerManagePage() {
                     onClick={() => router.push(`/files?path=${encodeURIComponent(filesCurrentPath)}`)}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Otworz w menedzerze
+                    Menedżer
                   </Button>
                 </div>
               </div>
@@ -964,6 +974,64 @@ export default function GameServerManagePage() {
               )}
             </CardContent>
           </Card>
+
+          {/* FTP access card */}
+          {serverInfo && (
+            <Card>
+              <CardContent>
+                <div className="flex items-center gap-2 mb-4">
+                  <Wifi className="w-4 h-4 text-[var(--primary)]" />
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Dostęp FTP</h3>
+                </div>
+                {serverInfo.ftpUser ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { label: 'Host', value: serverInfo.domain?.split(':')[0] ?? '<IP_SERWERA>', mono: true },
+                      { label: 'Port', value: '21', mono: true },
+                      { label: 'Użytkownik', value: serverInfo.ftpUser, mono: true },
+                      { label: 'Katalog', value: `/opt/game-servers/${shortName}/serverfiles`, mono: true },
+                    ].map(({ label, value, mono }) => (
+                      <div key={label} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                        <span className="text-xs text-[var(--text-muted)] flex-shrink-0">{label}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className={`text-xs text-[var(--text-secondary)] truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(value); setFtpCopied(label); setTimeout(() => setFtpCopied(null), 2000) }}
+                            className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                          >
+                            {ftpCopied === label ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Password row — full width with show/hide */}
+                    <div className="sm:col-span-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                      <span className="text-xs text-[var(--text-muted)] flex-shrink-0">Hasło</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-mono text-[var(--text-secondary)] truncate">
+                          {ftpPasswordVisible ? serverInfo.ftpPassword : '••••••••••••••'}
+                        </span>
+                        <button onClick={() => setFtpPasswordVisible(v => !v)} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
+                          {ftpPasswordVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(serverInfo.ftpPassword ?? ''); setFtpCopied('Hasło'); setTimeout(() => setFtpCopied(null), 2000) }}
+                          className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                        >
+                          {ftpCopied === 'Hasło' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Konto FTP nie zostało skonfigurowane. Zainstaluj serwer ponownie lub sprawdź czy pure-ftpd jest zainstalowany.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          </div>
         )}
 
         {/* ── Mods tab ───────────────────────────────────────────────────────── */}

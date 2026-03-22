@@ -86,6 +86,32 @@ export async function listFtpUsers(): Promise<{ username: string; homeDir: strin
   return users
 }
 
+/** Create an FTP user for a game server directory (bypasses /var/www restriction) */
+export async function createGameServerFtpUser(username: string, password: string, homeDir: string, systemUser: string): Promise<void> {
+  validateUsername(username)
+
+  if (!existsSync(homeDir)) {
+    await mkdir(homeDir, { recursive: true })
+  }
+
+  // Get UID of the system user (e.g. gsm/gameservers)
+  const { stdout: uidRaw } = await run(`id -u ${systemUser} 2>/dev/null || echo ""`)
+  const uid = uidRaw.trim()
+  if (!uid) throw new Error(`System user "${systemUser}" not found`)
+
+  // Remove if already exists (idempotent re-install)
+  await run(`pure-pw userdel ${username} -m 2>/dev/null || true`)
+
+  await run(
+    `printf '%s\\n%s\\n' ${sq(password)} ${sq(password)} | pure-pw useradd ${username} -u ${uid} -d ${homeDir} -m`
+  )
+  await run('pure-pw mkdb')
+}
+
+export async function deleteGameServerFtpUser(username: string): Promise<void> {
+  await run(`pure-pw userdel ${username} -m 2>/dev/null || true`)
+}
+
 export async function isFtpAvailable(): Promise<boolean> {
   try {
     const { stdout } = await run('which pure-pw 2>/dev/null')

@@ -11,6 +11,8 @@ import { promisify } from 'util'
 import { writeFile, readFile, readdir, rm } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
+import { randomBytes } from 'crypto'
+import { createGameServerFtpUser, deleteGameServerFtpUser, isFtpAvailable } from './ftp.js'
 
 const execAsync = promisify(exec)
 
@@ -467,8 +469,24 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
     })
   }
 
-  // 8. Save config
+  // 8. Save config + create FTP user
+  const ftpUsername = `gs_${safe}`
+  const ftpPassword = randomBytes(10).toString('base64url').slice(0, 14)
+  let ftpCreated = false
+
   await logStep('Zapisywanie konfiguracji', async () => {
+    // Try to create FTP account for serverfiles/
+    try {
+      if (await isFtpAvailable()) {
+        const serverFilesDir = `${installDir}/serverfiles`
+        await createGameServerFtpUser(ftpUsername, ftpPassword, serverFilesDir, GSM_USER)
+        ftpCreated = true
+        log.push(`  FTP: ${ftpUsername} → ${serverFilesDir}`)
+      }
+    } catch (ftpErr: any) {
+      log.push(`  FTP warning: ${ftpErr.message}`)
+    }
+
     const config = JSON.stringify({
       shortName, serverName: serverName ?? template?.name ?? shortName,
       domain: domain ?? null, port: gamePort, maxPlayers: maxPlayers ?? null,
@@ -476,6 +494,8 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
       version: version ?? null,
       serverType: serverType ?? 'vanilla',
       maxRam: maxRam ?? null,
+      ftpUser: ftpCreated ? ftpUsername : null,
+      ftpPassword: ftpCreated ? ftpPassword : null,
       installedAt: new Date().toISOString(),
     }, null, 2)
     await writeFile(`${installDir}/overpanel-config.json`, config, 'utf-8')
@@ -619,6 +639,8 @@ export interface InstalledServerInfo {
   maxPlayers: number | null
   password: string | null
   maxRam: number | null
+  ftpUser: string | null
+  ftpPassword: string | null
 }
 
 export async function getInstalledServers(): Promise<InstalledServerInfo[]> {
@@ -641,6 +663,8 @@ export async function getInstalledServers(): Promise<InstalledServerInfo[]> {
         maxPlayers: config.maxPlayers ?? null,
         password: config.password ?? null,
         maxRam: config.maxRam ?? null,
+        ftpUser: config.ftpUser ?? null,
+        ftpPassword: config.ftpPassword ?? null,
       })
     }
     return installed
@@ -849,9 +873,12 @@ export async function uninstallGameServer(shortName: string): Promise<void> {
   // Try to stop first
   try {
     await stopGameServer(shortName)
-  } catch {
-    // Ignore — server might not be running
-  }
+  } catch {}
+
+  // Remove FTP user if it was created
+  try {
+    await deleteGameServerFtpUser(`gs_${safe}`)
+  } catch {}
 
   // Remove directory
   await rm(installDir, { recursive: true, force: true })
