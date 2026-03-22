@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/version-1.0.11-E91E8C?style=for-the-badge" alt="Version 1.0.11" />
+<img src="https://img.shields.io/badge/version-1.0.12-E91E8C?style=for-the-badge" alt="Version 1.0.12" />
 <img src="https://img.shields.io/badge/ubuntu-22.04%20%7C%2024.04-9B26D9?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
 <img src="https://img.shields.io/badge/license-proprietary-0A0A0F?style=for-the-badge" alt="License" />
 
@@ -102,12 +102,6 @@ OverCMS to autorski, modularny headless CMS stworzony przez OVERMEDIA — nowocz
 - Sprawdzanie aktualizacji (git) + jednoklinkowy update z live logiem
 - Badge aktualizacji przy stronie gdy nowa wersja dostępna
 - Odinstalowanie (kontenery, wolumeny, pliki)
-
-**System licencji OverCMS (zakładka Licencje CMS — dla reselerów):**
-- Generowanie kluczy licencyjnych dla klientów
-- Plany: Trial, Solo, Agency (limit instalacji per klucz)
-- Wysyłka klucza e-mailem, podgląd aktywnych instalacji per licencja
-- Zarządzany przez centralny serwer `license.overcms.pl`
 
 ### SSL / HTTPS
 - Inteligentna detekcja: Cloudflare Tunnel → Cloudflare Origin Cert → Let's Encrypt
