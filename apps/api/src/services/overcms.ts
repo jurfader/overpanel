@@ -85,6 +85,7 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
 }> {
   const { domain, adminEmail, adminPassword, licenseKey } = options
   const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
+  const licenseServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://localhost:3002'
   const installDir = `${OVERCMS_BASE_DIR}/${safeDomain}`
   const portBase = await getNextPortBase()
 
@@ -177,9 +178,9 @@ ADMIN_CORS_ORIGINS=https://${domain}
 ADMIN_DOMAIN=${domain}
 NEXT_PUBLIC_API_URL=https://${domain}
 
-# License — centralny serwer licencji (nie lokalny kontener)
-LICENSE_SERVER_URL=https://license.overcms.pl
-LICENSE_DOMAIN=license.overcms.pl
+# License — centralny serwer licencji
+LICENSE_SERVER_URL=${licenseServerUrl}
+LICENSE_DOMAIN=disabled.local
 OVERCMS_LICENSE_KEY=${licenseKey || ''}
 OVERCMS_INSTALL_ID=${randomBytes(16).toString('hex')}
 SITE_URL=https://${domain}
@@ -187,7 +188,7 @@ SITE_URL=https://${domain}
 # Portal
 PORTAL_DOMAIN=${domain}
 NEXT_PUBLIC_SITE_URL=https://${domain}
-NEXT_PUBLIC_LICENSE_SERVER_URL=https://license.overcms.pl
+NEXT_PUBLIC_LICENSE_SERVER_URL=${licenseServerUrl}
 
 # SSL
 ACME_EMAIL=${adminEmail}
@@ -231,7 +232,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://${domain}
         NEXT_PUBLIC_SITE_URL: https://${domain}
-        NEXT_PUBLIC_LICENSE_SERVER_URL: https://license.overcms.pl
+        NEXT_PUBLIC_LICENSE_SERVER_URL: ${licenseServerUrl}
     ports:
       - "${portalPort}:3004"
   license-server:
