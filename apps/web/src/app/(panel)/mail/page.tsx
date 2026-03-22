@@ -16,7 +16,7 @@ import { formatDate } from '@/lib/utils'
 import {
   Mail, Plus, Trash2, RefreshCw, Globe, Lock, User, Key,
   CheckCircle2, XCircle, Shield, Copy, ExternalLink, Server,
-  AlertCircle, Eye, EyeOff,
+  AlertCircle, Eye, EyeOff, Download,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -283,6 +283,7 @@ export default function MailPage() {
   const [enableDomain, setEnableDomain] = useState('')
   const [enablingDomain, setEnablingDomain] = useState(false)
   const [showEnableDomain, setShowEnableDomain] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   const mailRunning = statusData?.running ?? false
   const domainList = domains ?? []
@@ -321,6 +322,20 @@ export default function MailPage() {
       refetchMailboxes()
     } catch (err) {
       alert(err instanceof ApiError ? err.message : 'Błąd')
+    }
+  }
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const result = await api.post<{ domainsImported: number; mailboxesImported: number }>('/api/mail/sync', {})
+      refetchDomains()
+      refetchMailboxes()
+      alert(`Synchronizacja zakończona: ${result.domainsImported} domen, ${result.mailboxesImported} skrzynek zaimportowano.`)
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Błąd synchronizacji')
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -369,9 +384,14 @@ export default function MailPage() {
                 <RefreshCw className="w-4 h-4" />
               </Button>
               {isAdmin && (
-                <Button size="sm" onClick={() => setShowEnableDomain(true)}>
-                  <Plus className="w-4 h-4" /> Włącz pocztę
-                </Button>
+                <>
+                  <Button variant="secondary" size="sm" onClick={handleSync} loading={syncing} title="Importuj domeny i skrzynki ze Stalwarta">
+                    <Download className="w-4 h-4" /> Synchronizuj
+                  </Button>
+                  <Button size="sm" onClick={() => setShowEnableDomain(true)}>
+                    <Plus className="w-4 h-4" /> Włącz pocztę
+                  </Button>
+                </>
               )}
             </div>
           </CardHeader>

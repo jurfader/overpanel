@@ -10,6 +10,8 @@ import {
   updateStalwartPassword,
   deleteStalwartAccount,
   getStalwartDkimPublicKey,
+  listStalwartDomains,
+  listStalwartAccounts,
 } from '../services/stalwart.js'
 import {
   configureMailDns,
@@ -464,6 +466,69 @@ export async function mailRoutes(fastify: FastifyInstance) {
     })
 
     return reply.send({ success: true, data: null })
+  })
+
+  // ── Sync from Stalwart ─────────────────────────────────────────────────────
+
+  // POST /api/mail/sync — import domains & mailboxes from Stalwart into DB
+  fastify.post('/sync', { preHandler: [adminOnly] }, async (request, reply) => {
+    const caller = getRequestUser(request)
+
+    let domainsImported = 0
+    let mailboxesImported = 0
+
+    // 1. Fetch all domains from Stalwart
+    const stalwartDomains = await listStalwartDomains()
+
+    for (const domain of stalwartDomains) {
+      const existing = await prisma.mailDomain.findUnique({ where: { domain } })
+      if (!existing) {
+        const dkimPublicKey = await getStalwartDkimPublicKey(domain).catch(() => null)
+        await prisma.mailDomain.create({
+          data: {
+            domain,
+            dkimPublicKey,
+            mxConfigured: false,
+            spfConfigured: false,
+            dkimConfigured: false,
+            dmarcConfigured: false,
+            userId: caller.id,
+          },
+        })
+        domainsImported++
+      }
+    }
+
+    // 2. Fetch all accounts from Stalwart
+    const stalwartAccounts = await listStalwartAccounts()
+
+    for (const account of stalwartAccounts) {
+      const existing = await prisma.mailbox.findUnique({ where: { address: account.email } })
+      if (existing) continue
+
+      const [localPart, domainName] = account.email.split('@')
+      if (!localPart || !domainName) continue
+
+      const mailDomain = await prisma.mailDomain.findUnique({ where: { domain: domainName } })
+      if (!mailDomain) continue
+
+      await prisma.mailbox.create({
+        data: {
+          address: account.email,
+          localPart,
+          displayName: account.displayName || localPart,
+          quotaMb: account.quotaMb || 500,
+          domainId: mailDomain.id,
+          userId: mailDomain.userId,
+        },
+      })
+      mailboxesImported++
+    }
+
+    return reply.send({
+      success: true,
+      data: { domainsImported, mailboxesImported },
+    })
   })
 
   // ── Connection info ────────────────────────────────────────────────────────

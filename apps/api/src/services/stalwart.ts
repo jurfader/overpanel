@@ -119,6 +119,24 @@ export async function deleteStalwartAccount(email: string): Promise<void> {
   await stalwartApi(`/api/principal/${encodeURIComponent(email)}`, 'DELETE')
 }
 
+// ── List ─────────────────────────────────────────────────────────────────────
+
+export async function listStalwartDomains(): Promise<string[]> {
+  const result = await stalwartApi('/api/principal?type=domain&limit=1000')
+  const items: any[] = result?.items ?? (Array.isArray(result) ? result : [])
+  return items.map((d: any) => d.name).filter(Boolean)
+}
+
+export async function listStalwartAccounts(): Promise<{ email: string; displayName: string; quotaMb: number }[]> {
+  const result = await stalwartApi('/api/principal?type=individual&limit=1000')
+  const items: any[] = result?.items ?? (Array.isArray(result) ? result : [])
+  return items.map((a: any) => ({
+    email: a.name as string,
+    displayName: (a.description ?? a.name) as string,
+    quotaMb: a.quota ? Math.round(a.quota / 1024 / 1024) : 500,
+  })).filter((a) => a.email && a.email.includes('@'))
+}
+
 // ── DKIM ─────────────────────────────────────────────────────────────────────
 
 export async function getStalwartDkimPublicKey(
