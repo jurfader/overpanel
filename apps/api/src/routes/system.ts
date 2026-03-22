@@ -148,7 +148,7 @@ export async function systemRoutes(fastify: FastifyInstance) {
     // Build version string: semver from package.json + short commit hash
     let currentVersion = 'unknown'
     try {
-      const pkgPath = `${repoDir}/package.json`
+      const pkgPath = `${repoDir}/apps/web/package.json`
       if (existsSync(pkgPath)) {
         const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'))
         currentVersion = pkg.version ?? '0.0.0'
