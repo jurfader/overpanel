@@ -249,10 +249,12 @@ export interface GameInstallOptions {
   maxPlayers?: number
   password?: string
   cfToken?: string      // Cloudflare API token for DNS
+  version?: string      // MC version e.g. "1.21.4"
+  serverType?: string   // "vanilla"|"paper"|"purpur"|"fabric"|"forge"
 }
 
 export async function installGameServer(options: GameInstallOptions): Promise<void> {
-  const { shortName, serverName, domain, port, maxPlayers, password, cfToken } = options
+  const { shortName, serverName, domain, port, maxPlayers, password, cfToken, version, serverType } = options
   const template = GAME_SERVER_TEMPLATES.find(t => t.shortName === shortName)
   const safe = shortName.replace(/[^a-z0-9]/g, '')
   const installDir = `${GAME_SERVERS_BASE}/${safe}`
@@ -326,6 +328,58 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
     await runLong(`su - ${GSM_USER} -c "cd ${installDir} && ./${safe} auto-install"`, 1800_000) // 30 min timeout
   })
 
+  // 6b. Server type customization (Paper/Purpur/Fabric/Forge)
+  const mcServers = ['mcserver', 'pmcserver', 'vpmcserver', 'wmcserver']
+  if (mcServers.includes(safe) && serverType && serverType !== 'vanilla') {
+    await logStep(`Instalacja ${serverType} server`, async () => {
+      const serverFilesDir = `${installDir}/serverfiles`
+      const mcVersion = version || '1.21.4'
+
+      if (serverType === 'paper') {
+        const { stdout: buildsJson } = await runLong(
+          `curl -s "https://api.papermc.io/v2/projects/paper/versions/${mcVersion}/builds"`,
+          30_000
+        )
+        const builds = JSON.parse(buildsJson)
+        const latestBuild = builds.builds[builds.builds.length - 1]
+        const buildNum = latestBuild.build
+        const jarName = `paper-${mcVersion}-${buildNum}.jar`
+        await runLong(
+          `curl -Lo "${serverFilesDir}/server.jar" "https://api.papermc.io/v2/projects/paper/versions/${mcVersion}/builds/${buildNum}/downloads/${jarName}"`,
+          120_000
+        )
+        await run(`chown ${GSM_USER}:${GSM_USER} "${serverFilesDir}/server.jar"`)
+
+      } else if (serverType === 'purpur') {
+        await runLong(
+          `curl -Lo "${serverFilesDir}/server.jar" "https://api.purpurmc.org/v2/purpur/${mcVersion}/latest/download"`,
+          120_000
+        )
+        await run(`chown ${GSM_USER}:${GSM_USER} "${serverFilesDir}/server.jar"`)
+
+      } else if (serverType === 'fabric') {
+        const { stdout: installerJson } = await runLong(
+          `curl -s "https://meta.fabricmc.net/v2/versions/installer"`,
+          30_000
+        )
+        const installers = JSON.parse(installerJson)
+        const installerUrl = installers[0].url
+        await runLong(`curl -Lo /tmp/fabric-installer.jar "${installerUrl}"`, 60_000)
+        await runLong(
+          `cd "${serverFilesDir}" && java -jar /tmp/fabric-installer.jar server -mcversion ${mcVersion} -downloadMinecraft -dir "${serverFilesDir}"`,
+          300_000
+        )
+        const lgsmCfgDir = `${installDir}/lgsm/config-lgsm/${safe}`
+        await run(`mkdir -p "${lgsmCfgDir}"`)
+        await writeFile(`${lgsmCfgDir}/${safe}.cfg`, `# Fabric server\nexecutable="fabric-server-launch.jar"\n`, 'utf-8')
+        await run(`chown -R ${GSM_USER}:${GSM_USER} "${lgsmCfgDir}"`)
+
+      } else if (serverType === 'forge') {
+        log.push('  ℹ Forge wymaga ręcznej instalacji. Zainstalowano Vanilla — pobierz Forge installer i uruchom ręcznie.')
+      }
+    })
+  }
+
   // 6. Open port in UFW firewall
   await logStep(`Otwieranie portu ${gamePort} w firewall`, async () => {
     const proto = template?.protocol ?? 'both'
@@ -365,7 +419,10 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
     const config = JSON.stringify({
       shortName, serverName: serverName ?? template?.name ?? shortName,
       domain: domain ?? null, port: gamePort, maxPlayers: maxPlayers ?? null,
-      password: password ?? null, installedAt: new Date().toISOString(),
+      password: password ?? null,
+      version: version ?? null,
+      serverType: serverType ?? 'vanilla',
+      installedAt: new Date().toISOString(),
     }, null, 2)
     await writeFile(`${installDir}/overpanel-config.json`, config, 'utf-8')
   })

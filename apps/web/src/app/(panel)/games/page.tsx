@@ -110,6 +110,8 @@ export default function GameServersPage() {
   const [formPort, setFormPort] = useState('')
   const [formMaxPlayers, setFormMaxPlayers] = useState('')
   const [formPassword, setFormPassword] = useState('')
+  const [formVersion, setFormVersion] = useState('')
+  const [formServerType, setFormServerType] = useState('vanilla')
 
   // Confirm uninstall modal
   const [uninstallTarget, setUninstallTarget] = useState<InstalledServer | null>(null)
@@ -178,6 +180,8 @@ export default function GameServersPage() {
     }
   }
 
+  const isMcServer = ['mcserver', 'mcbserver', 'pmcserver'].includes(installTarget?.shortName ?? '')
+
   const handleInstall = (template: GameServerTemplate) => {
     setInstallTarget(template)
     setInstallPhase('config')
@@ -187,6 +191,8 @@ export default function GameServersPage() {
     setFormPort(String(template.defaultPort))
     setFormMaxPlayers('')
     setFormPassword('')
+    setFormVersion('')
+    setFormServerType('vanilla')
   }
 
   const handleStartInstall = async () => {
@@ -202,6 +208,8 @@ export default function GameServersPage() {
     if (formPort) body.port = parseInt(formPort, 10)
     if (formMaxPlayers) body.maxPlayers = parseInt(formMaxPlayers, 10)
     if (formPassword) body.password = formPassword
+    if (formVersion) body.version = formVersion
+    if (formServerType && formServerType !== 'vanilla') body.serverType = formServerType
 
     try {
       await api.post('/api/game-servers/install', body)
@@ -537,6 +545,40 @@ export default function GameServersPage() {
                       <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Nazwa serwera</label>
                       <input className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all" value={formServerName} onChange={e => setFormServerName(e.target.value)} placeholder="Mój serwer" />
                     </div>
+                    {isMcServer && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Wersja Minecraft</label>
+                          <input
+                            list="mc-versions"
+                            value={formVersion}
+                            onChange={e => setFormVersion(e.target.value)}
+                            placeholder="np. 1.21.4 (domyślnie: najnowsza)"
+                            className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all"
+                          />
+                          <datalist id="mc-versions">
+                            {['1.21.4','1.21.1','1.20.6','1.20.4','1.20.1','1.19.4','1.18.2','1.17.1','1.16.5','1.12.2','1.8.9'].map(v => (
+                              <option key={v} value={v} />
+                            ))}
+                          </datalist>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Typ serwera</label>
+                          <select
+                            value={formServerType}
+                            onChange={e => setFormServerType(e.target.value)}
+                            className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all cursor-pointer"
+                          >
+                            <option value="vanilla">Vanilla (oficjalny Mojang)</option>
+                            <option value="paper">Paper (najlepsza wydajność, pluginy)</option>
+                            <option value="purpur">Purpur (Paper + dodatkowe opcje)</option>
+                            <option value="fabric">Fabric (mody Fabric)</option>
+                            <option value="forge">Forge (mody Forge)</option>
+                          </select>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-1">Paper/Purpur — obsługują pluginy Bukkit/Spigot. Fabric/Forge — do modów.</p>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Subdomena (opcjonalna)</label>
                       <input className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all" value={formDomain} onChange={e => setFormDomain(e.target.value.toLowerCase())} placeholder="mc.twojadomena.pl" />

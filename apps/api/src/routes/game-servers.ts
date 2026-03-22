@@ -203,6 +203,8 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
     port: z.number().int().min(1024).max(65535).optional(),
     maxPlayers: z.number().int().min(1).max(1000).optional(),
     password: z.string().max(100).optional(),
+    version: z.string().max(20).regex(/^[0-9.]*$/).optional(),
+    serverType: z.enum(['vanilla', 'paper', 'purpur', 'fabric', 'forge']).optional(),
   })
 
   fastify.post('/install', { preHandler: [authMiddleware] }, async (request, reply) => {
@@ -210,7 +212,7 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
     if (!body.success) {
       return reply.code(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' })
     }
-    const { shortName, serverName, domain, port, maxPlayers, password } = body.data
+    const { shortName, serverName, domain, port, maxPlayers, password, version, serverType } = body.data
     const caller = getRequestUser(request)
 
     const template = GAME_SERVER_TEMPLATES.find(t => t.shortName === shortName)
@@ -240,6 +242,8 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
         await installGameServer({
           shortName, serverName, domain, port, maxPlayers, password,
           cfToken: cfToken ?? undefined,
+          version,
+          serverType,
         })
       } catch (err) {
         console.error(`[GameServers] Install failed for ${shortName}:`, err)

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/use-api'
-import { formatBytes } from '@/lib/utils'
+import { formatBytes, formatDate } from '@/lib/utils'
 import {
   ArrowLeft,
   Play,
@@ -58,6 +58,15 @@ interface ConfigData {
 interface ModFile {
   name: string
   size: number
+}
+
+interface FileEntry {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  size: number
+  modifiedAt: string
+  extension?: string
 }
 
 interface ModrinthResult {
@@ -137,6 +146,15 @@ export default function GameServerManagePage() {
   const [modrinthSearching, setModrinthSearching] = useState(false)
   const [installingMod, setInstallingMod] = useState<string | null>(null)
   const [deletingMod, setDeletingMod] = useState<string | null>(null)
+  const [popularMods, setPopularMods] = useState<ModrinthResult[]>([])
+  const [popularModpacks, setPopularModpacks] = useState<ModrinthResult[]>([])
+  const [popularLoading, setPopularLoading] = useState(false)
+  const [modsSubTab, setModsSubTab] = useState<'mods' | 'modpacks'>('mods')
+
+  // Files state
+  const [filesCurrentPath, setFilesCurrentPath] = useState(`/opt/game-servers/${shortName}/serverfiles`)
+  const [fileEntries, setFileEntries] = useState<FileEntry[]>([])
+  const [filesLoading, setFilesLoading] = useState(false)
 
   // Logs state
   const [logLines, setLogLines] = useState<string[]>([])
@@ -308,8 +326,11 @@ export default function GameServerManagePage() {
     if (!modrinthSearch.trim()) return
     setModrinthSearching(true)
     try {
+      const facets = modsSubTab === 'modpacks'
+        ? encodeURIComponent('[["project_type:modpack"]]')
+        : encodeURIComponent('[["project_type:mod"]]')
       const res = await fetch(
-        `https://api.modrinth.com/v2/search?query=${encodeURIComponent(modrinthSearch)}&facets=${encodeURIComponent('[["project_type:mod"]]')}&limit=12`
+        `https://api.modrinth.com/v2/search?query=${encodeURIComponent(modrinthSearch)}&facets=${facets}&limit=12`
       )
       const data = await res.json()
       setModrinthResults(data.hits ?? [])
@@ -319,6 +340,31 @@ export default function GameServerManagePage() {
       setModrinthSearching(false)
     }
   }
+
+  const loadPopularContent = async () => {
+    setPopularLoading(true)
+    try {
+      const [modsRes, modpacksRes] = await Promise.all([
+        fetch(`https://api.modrinth.com/v2/search?facets=${encodeURIComponent('[["project_type:mod"]]')}&index=follows&limit=12`),
+        fetch(`https://api.modrinth.com/v2/search?facets=${encodeURIComponent('[["project_type:modpack"]]')}&index=follows&limit=12`),
+      ])
+      const modsData = await modsRes.json()
+      const modpacksData = await modpacksRes.json()
+      setPopularMods(modsData.hits ?? [])
+      setPopularModpacks(modpacksData.hits ?? [])
+    } catch {
+      // Silently ignore
+    } finally {
+      setPopularLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (tab === 'mods' && isMinecraft && popularMods.length === 0) {
+      loadPopularContent()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, isMinecraft])
 
   const handleInstallMod = async (mod: ModrinthResult) => {
     setInstallingMod(mod.slug)
@@ -356,6 +402,26 @@ export default function GameServerManagePage() {
       setDeletingMod(null)
     }
   }
+
+  // ── Files ────────────────────────────────────────────────────────────────────
+
+  const fetchFiles = useCallback(async (dirPath: string) => {
+    setFilesLoading(true)
+    try {
+      const data = await api.get<FileEntry[]>(`/api/files/list?path=${encodeURIComponent(dirPath)}`)
+      setFileEntries(data)
+    } catch {
+      setFileEntries([])
+    } finally {
+      setFilesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'files') {
+      fetchFiles(filesCurrentPath)
+    }
+  }, [tab, filesCurrentPath, fetchFiles])
 
   // ── Logs ────────────────────────────────────────────────────────────────────
 
@@ -675,28 +741,107 @@ export default function GameServerManagePage() {
         {tab === 'files' && (
           <Card>
             <CardContent>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pliki serwera</h3>
-                  <p className="text-xs text-[var(--text-muted)] font-mono mt-1">/opt/game-servers/{shortName}/</p>
+              {/* Header: breadcrumb + actions */}
+              <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                <div className="flex items-center gap-1 flex-1 min-w-0 flex-wrap">
+                  {/* Back button */}
+                  <button
+                    onClick={() => {
+                      const parent = filesCurrentPath.split('/').slice(0, -1).join('/') || '/'
+                      if (filesCurrentPath !== `/opt/game-servers/${shortName}`) {
+                        setFilesCurrentPath(parent)
+                      }
+                    }}
+                    disabled={filesCurrentPath === `/opt/game-servers/${shortName}`}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                    title="Poziom wyżej"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                  </button>
+                  {/* Breadcrumb */}
+                  <div className="flex items-center gap-1 flex-wrap font-mono text-xs text-[var(--text-muted)]">
+                    {filesCurrentPath.split('/').reduce<{ label: string; path: string }[]>((acc, seg, i, arr) => {
+                      if (!seg) return acc
+                      const p = arr.slice(0, i + 1).join('/')
+                      acc.push({ label: seg, path: p || '/' })
+                      return acc
+                    }, []).map((crumb, i, arr) => (
+                      <span key={crumb.path} className="flex items-center gap-1">
+                        {i > 0 && <span className="opacity-40">/</span>}
+                        <button
+                          onClick={() => setFilesCurrentPath(crumb.path)}
+                          className={`hover:text-[var(--text-primary)] transition-colors ${i === arr.length - 1 ? 'text-[var(--text-primary)]' : ''}`}
+                        >
+                          {crumb.label}
+                        </button>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => router.push(`/files?path=${encodeURIComponent(`/opt/game-servers/${shortName}`)}`)}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Otworz w menedzerze plikow
-                </Button>
-              </div>
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <FolderOpen className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-3 opacity-50" />
-                  <p className="text-sm text-[var(--text-muted)]">
-                    Uzyj menedzera plikow, aby przegladac i edytowac pliki serwera.
-                  </p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button size="sm" variant="ghost" onClick={() => fetchFiles(filesCurrentPath)} loading={filesLoading}>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => router.push(`/files?path=${encodeURIComponent(filesCurrentPath)}`)}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Otworz w menedzerze
+                  </Button>
                 </div>
               </div>
+
+              {/* File list */}
+              {filesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-5 h-5 text-[var(--primary)] animate-spin" />
+                </div>
+              ) : fileEntries.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <FolderOpen className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-2 opacity-40" />
+                    <p className="text-sm text-[var(--text-muted)]">Katalog jest pusty lub nie istnieje.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {[...fileEntries]
+                    .sort((a, b) => {
+                      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+                      return a.name.localeCompare(b.name)
+                    })
+                    .map(entry => (
+                      <div
+                        key={entry.path}
+                        onClick={() => {
+                          if (entry.type === 'directory') setFilesCurrentPath(entry.path)
+                        }}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all ${
+                          entry.type === 'directory'
+                            ? 'cursor-pointer hover:bg-white/[0.05]'
+                            : 'cursor-default'
+                        }`}
+                      >
+                        {entry.type === 'directory' ? (
+                          <FolderOpen className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
+                        ) : (
+                          <FileText className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
+                        )}
+                        <span className={`flex-1 text-sm truncate ${entry.type === 'directory' ? 'text-[var(--text-primary)] font-medium' : 'text-[var(--text-secondary)]'}`}>
+                          {entry.name}
+                        </span>
+                        <span className="text-[11px] text-[var(--text-muted)] font-mono flex-shrink-0 w-16 text-right">
+                          {entry.type === 'file' ? formatBytes(entry.size) : ''}
+                        </span>
+                        <span className="text-[11px] text-[var(--text-muted)] flex-shrink-0 w-32 text-right hidden sm:block">
+                          {formatDate(entry.modifiedAt)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -760,10 +905,34 @@ export default function GameServerManagePage() {
             {isMinecraft && (
               <Card>
                 <CardContent>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">
-                    Szukaj modow (Modrinth)
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Modrinth</h3>
+                    {/* Sub-tabs */}
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+                      <button
+                        onClick={() => { setModsSubTab('mods'); setModrinthResults([]) }}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                          modsSubTab === 'mods'
+                            ? 'gradient-brand text-white'
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                        }`}
+                      >
+                        Mody
+                      </button>
+                      <button
+                        onClick={() => { setModsSubTab('modpacks'); setModrinthResults([]) }}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                          modsSubTab === 'modpacks'
+                            ? 'gradient-brand text-white'
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                        }`}
+                      >
+                        Modpacki
+                      </button>
+                    </div>
+                  </div>
 
+                  {/* Search bar */}
                   <div className="flex items-center gap-2 mb-4">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
@@ -772,7 +941,7 @@ export default function GameServerManagePage() {
                         value={modrinthSearch}
                         onChange={e => setModrinthSearch(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleModrinthSearch()}
-                        placeholder="Szukaj modow na Modrinth..."
+                        placeholder={`Szukaj na Modrinth (${modsSubTab === 'mods' ? 'mody' : 'modpacki'})...`}
                         className="w-full h-10 pl-10 pr-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all"
                       />
                     </div>
@@ -782,42 +951,67 @@ export default function GameServerManagePage() {
                     </Button>
                   </div>
 
-                  {modrinthResults.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {modrinthResults.map(mod => (
-                        <div
-                          key={mod.slug}
-                          className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
-                        >
-                          {mod.icon_url ? (
-                            <img src={mod.icon_url} alt={mod.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                              <Puzzle className="w-5 h-5 text-[var(--text-muted)]" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-[var(--text-primary)] truncate">{mod.title}</h4>
-                            <p className="text-[11px] text-[var(--text-muted)] line-clamp-2 mt-0.5">{mod.description}</p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="text-[10px] text-[var(--text-muted)]">
-                                {mod.downloads.toLocaleString()} pobrań
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleInstallMod(mod)}
-                                loading={installingMod === mod.slug}
-                              >
-                                <Download className="w-3 h-3" />
-                                Zainstaluj
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                  {/* Results: search results or popular */}
+                  {modrinthSearching || popularLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 text-[var(--primary)] animate-spin" />
                     </div>
-                  )}
+                  ) : (() => {
+                    const displayList = modrinthResults.length > 0
+                      ? modrinthResults
+                      : modsSubTab === 'mods' ? popularMods : popularModpacks
+                    const isPopular = modrinthResults.length === 0
+
+                    return (
+                      <>
+                        {isPopular && displayList.length > 0 && (
+                          <p className="text-[11px] text-[var(--text-muted)] mb-3">
+                            Popularne {modsSubTab === 'mods' ? 'mody' : 'modpacki'} na Modrinth
+                          </p>
+                        )}
+                        {displayList.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {displayList.map(mod => (
+                              <div
+                                key={mod.slug}
+                                className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+                              >
+                                {mod.icon_url ? (
+                                  <img src={mod.icon_url} alt={mod.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                                    <Puzzle className="w-5 h-5 text-[var(--text-muted)]" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-sm font-medium text-[var(--text-primary)] truncate">{mod.title}</h4>
+                                  <p className="text-[11px] text-[var(--text-muted)] line-clamp-2 mt-0.5">{mod.description}</p>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <span className="text-[10px] text-[var(--text-muted)]">
+                                      {mod.downloads.toLocaleString()} pobrań
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleInstallMod(mod)}
+                                      loading={installingMod === mod.slug}
+                                    >
+                                      <Download className="w-3 h-3" />
+                                      Zainstaluj
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-[var(--text-muted)] py-4 text-center">
+                            Brak wynikow. Sprobuj innej frazy.
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()}
                 </CardContent>
               </Card>
             )}
