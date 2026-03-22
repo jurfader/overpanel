@@ -561,9 +561,10 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                           placeholder="XXXX-XXXX-XXXX-XXXX"
                           value={cmsLicenseKey}
                           onChange={(e) => setCmsLicenseKey(e.target.value)}
+                          required
                         />
                         <p className="text-[10px] text-[var(--text-muted)]">
-                          Instalacja wymaga klucza licencyjnego OverCMS. Bez klucza CMS będzie działać w trybie trial.
+                          Klucz licencyjny jest wymagany do instalacji OverCMS.
                         </p>
                       </div>
                     </div>

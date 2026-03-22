@@ -72,6 +72,11 @@ export async function sitesRoutes(fastify: FastifyInstance) {
 
     const { domain, siteType, phpVersion, appPort, startCommand, enableSsl, userId } = body.data
 
+    // OverCMS wymaga klucza licencyjnego
+    if (siteType === 'overcms' && !body.data.licenseKey?.trim()) {
+      return reply.code(400).send({ success: false, error: 'Klucz licencyjny jest wymagany do instalacji OverCMS' })
+    }
+
     // Klient może tworzyć tylko dla siebie
     const ownerId = caller.role === 'admin' && userId ? userId : caller.id
 
