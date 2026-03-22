@@ -22,7 +22,7 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
       const installed = await getInstalledServers()
       const templates = GAME_SERVER_TEMPLATES.map(t => ({
         ...t,
-        installed: installed.includes(t.shortName),
+        installed: installed.some(s => s.shortName === t.shortName),
       }))
       return reply.send({ success: true, data: templates })
     } catch (err) {
