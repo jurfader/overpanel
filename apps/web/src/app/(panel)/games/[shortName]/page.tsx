@@ -149,6 +149,12 @@ export default function GameServerManagePage() {
     `/api/game-servers/installed/${shortName}`
   )
 
+  // Poll server status every 5s to keep running/stopped badge up to date
+  useEffect(() => {
+    const interval = setInterval(refetchServer, 5000)
+    return () => clearInterval(interval)
+  }, [refetchServer])
+
   const isMinecraft = MINECRAFT_SERVERS.includes(shortName)
 
   const addToast = useCallback((message: string, type: 'success' | 'error') => {

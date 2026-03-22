@@ -306,6 +306,30 @@
 
 ---
 
+## FAZA 20 — Serwery gier (LinuxGSM)
+
+- [x] Prisma — GameServer model (shortName, serverName, domain, port, status)
+- [x] Service `game-servers.ts` — LinuxGSM wrapper (install, start, stop, restart, uninstall, getStatus)
+- [x] Automatyczna instalacja zależności (Java, SteamCMD, lib32gcc)
+- [x] 140+ szablonów gier z metadanymi (Steam AppID, kategoria, domyślny port)
+- [x] Ikony gier z Steam CDN
+- [x] API routes: GET templates, GET installed, POST install, POST start/stop/restart, DELETE, GET console, POST command, GET/PUT config, GET/POST/DELETE mods, GET logs, GET install-status
+- [x] Instalacja asynchroniczna z live logiem (polling co 2s)
+- [x] Auto-konfiguracja: port UFW, rekord DNS A w Cloudflare (bez proxy)
+- [x] UI — lista zainstalowanych serwerów (karta z status dot, start/stop/restart/odinstaluj)
+- [x] UI — katalog szablonów z wyszukiwarką i filtrami kategorii
+- [x] UI — modal instalacji (formularz: nazwa, subdomena, port, gracze, hasło) → progress terminal
+- [x] UI — strona szczegółów serwera (/games/[shortName]) z zakładkami:
+  - [x] Konsola (live tail + wysyłanie komend)
+  - [x] Konfiguracja (edytor server.cfg / server.properties + lgsm.cfg)
+  - [x] Pliki (przeglądanie katalogu serverfiles)
+  - [x] Mody (lista + instalacja przez URL / wyszukiwarka Modrinth)
+  - [x] Logi (script log + console log)
+- [x] Serwery gier dostępne tylko dla administratorów (adminOnly w sidebar)
+- [x] `games` jako sekcja uprawnień klienta w panelu użytkowników
+
+---
+
 ## Legenda statusów
 - `[ ]` — Do zrobienia
 - `[~]` — W trakcie
@@ -314,4 +338,4 @@
 
 ---
 
-*Ostatnia aktualizacja: 2026-03-21*
+*Ostatnia aktualizacja: 2026-03-22*

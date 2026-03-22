@@ -123,7 +123,13 @@ export default function GameServersPage() {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [installLog])
 
-  // Cleanup polling on unmount
+  // Poll installed servers status every 5s
+  useEffect(() => {
+    const interval = setInterval(refetchInstalled, 5000)
+    return () => clearInterval(interval)
+  }, [refetchInstalled])
+
+  // Cleanup install polling on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)

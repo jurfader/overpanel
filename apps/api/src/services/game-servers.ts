@@ -10,6 +10,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { writeFile, readFile, readdir, rm } from 'fs/promises'
 import { existsSync } from 'fs'
+import path from 'path'
 
 const execAsync = promisify(exec)
 
@@ -401,15 +402,34 @@ export async function restartGameServer(shortName: string): Promise<void> {
 export async function getGameServerStatus(shortName: string): Promise<{ running: boolean; pid?: number }> {
   const safe = shortName.replace(/[^a-z0-9]/g, '')
   const installDir = `${GAME_SERVERS_BASE}/${safe}`
+
+  // 1. Read LinuxGSM PID file (fastest — no subprocess)
+  const pidFile = path.join(installDir, 'log', 'pid', `${safe}.pid`)
   try {
-    const { stdout } = await runLong(`su - ${GSM_USER} -c "cd ${installDir} && ./${safe} details" 2>&1 || true`, 30_000)
-    // LinuxGSM details output includes "Status: STARTED" or "Status: STOPPED"
-    const running = /Status:\s+STARTED/i.test(stdout) || /is already running/i.test(stdout)
-    const pidMatch = stdout.match(/PID:\s+(\d+)/i)
-    return { running, pid: pidMatch ? parseInt(pidMatch[1], 10) : undefined }
+    const pidStr = await readFile(pidFile, 'utf-8')
+    const pid = parseInt(pidStr.trim(), 10)
+    if (!isNaN(pid) && pid > 0 && existsSync(`/proc/${pid}`)) {
+      return { running: true, pid }
+    }
   } catch {
-    return { running: false }
+    // PID file missing or unreadable — continue to next check
   }
+
+  // 2. pgrep fallback: look for a process owned by gsm matching the server name
+  try {
+    const { stdout } = await execAsync(
+      `pgrep -u ${GSM_USER} -a | grep -w "${safe}" | head -1 || true`,
+      { timeout: 5_000 }
+    )
+    if (stdout.trim()) {
+      const pid = parseInt(stdout.trim().split(/\s+/)[0], 10)
+      return { running: true, pid: isNaN(pid) ? undefined : pid }
+    }
+  } catch {
+    // ignore
+  }
+
+  return { running: false }
 }
 
 export interface InstalledServerInfo {
