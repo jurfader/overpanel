@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/version-1.0.10-E91E8C?style=for-the-badge" alt="Version 1.0.10" />
+<img src="https://img.shields.io/badge/version-1.0.11-E91E8C?style=for-the-badge" alt="Version 1.0.11" />
 <img src="https://img.shields.io/badge/ubuntu-22.04%20%7C%2024.04-9B26D9?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
 <img src="https://img.shields.io/badge/license-proprietary-0A0A0F?style=for-the-badge" alt="License" />
 
@@ -55,10 +55,59 @@ Instalator automatycznie:
 - Auto-backup przed aktualizacją
 
 ### OverCMS Integration
-- Docker Compose deployment z live progress
-- Automatyczna konfiguracja: PostgreSQL, Redis, MinIO, nginx proxy
-- Seed konta admina z danymi z formularza
-- Sprawdzanie aktualizacji (git) + jednoklinkowy update
+
+OverCMS to autorski, modularny headless CMS stworzony przez OVERMEDIA — nowoczesna alternatywa dla WordPress, dostępna bezpośrednio jako typ strony w OVERPANEL.
+
+**Instalacja jednym kliknięciem:**
+- Formularz: domena, e-mail admina, hasło, klucz licencyjny (opcjonalnie)
+- OVERPANEL klonuje repozytorium, generuje `.env`, buduje obrazy Docker
+- Live log instalacji (każdy krok widoczny w czasie rzeczywistym)
+- Po zakończeniu CMS gotowy pod podaną domeną z zalogowanym kontem admina
+
+**Architektura OverCMS (automatycznie konfigurowana przez OVERPANEL):**
+- **Admin** (Next.js 15) — panel zarządzania treścią
+- **API** (Hono.js) — backend REST, moduły, media, auth
+- **Web** (Next.js 15) — publiczna strona z ISR
+- **PostgreSQL** — główna baza z Drizzle ORM
+- **Redis** — cache, sesje, kolejki
+- **MinIO** — S3-compatible object storage (media, pliki do 50 MB)
+- Nginx bez Traefika — integruje się z istniejącym Nginx OVERPANEL
+
+**Zarządzanie treścią:**
+- Kreator typów treści z edytorem pól drag-and-drop (16+ typów: text, richtext, blocks, image, file, relation, repeater, select, date, color, json…)
+- Workflow publikowania: szkic → opublikowany → zaplanowany → archiwalny
+- Historia wersji z możliwością przywrócenia dowolnego snapshota
+- Singleton content types (np. strona „O nas")
+- SEO per wpis: meta, Open Graph, Twitter Card, canonical, noIndex
+
+**System modułów (rozszerzenia):**
+- **Blog** — listy postów, RSS feed, paginacja
+- **Formularze** — kreator formularzy (text, email, select, checkbox…), powiadomienia e-mail przez Resend, eksport CSV zgłoszeń
+- **Portfolio** — typ treści dla projektów/realizacji
+- Własne moduły montowane pod `/api/m/{moduleId}/*`
+
+**Media library:**
+- Upload z automatyczną optymalizacją: konwersja do AVIF/WebP (Sharp), wideo do WebM VP9+Opus (FFmpeg)
+- Foldery, tagi, alt text, napisy
+- Backend: S3/MinIO (Cloudflare R2 compatible) lub lokalny filesystem
+
+**Każda instalacja jest izolowana:**
+- Katalog: `/opt/overcms-sites/<domena>/`
+- Unikalny zestaw portów (bez konfliktów między klientami)
+- Własna baza danych i wolumeny Docker
+- Wiele instancji na jednym serwerze działa równolegle
+
+**Zarządzanie z poziomu OVERPANEL:**
+- Start / stop kontenerów
+- Sprawdzanie aktualizacji (git) + jednoklinkowy update z live logiem
+- Badge aktualizacji przy stronie gdy nowa wersja dostępna
+- Odinstalowanie (kontenery, wolumeny, pliki)
+
+**System licencji OverCMS (zakładka Licencje CMS — dla reselerów):**
+- Generowanie kluczy licencyjnych dla klientów
+- Plany: Trial, Solo, Agency (limit instalacji per klucz)
+- Wysyłka klucza e-mailem, podgląd aktywnych instalacji per licencja
+- Zarządzany przez centralny serwer `license.overcms.pl`
 
 ### SSL / HTTPS
 - Inteligentna detekcja: Cloudflare Tunnel → Cloudflare Origin Cert → Let's Encrypt
