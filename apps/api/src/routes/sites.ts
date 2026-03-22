@@ -273,17 +273,26 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     }
 
     if (site.siteType === 'overcms') {
-      const installDir = `/opt/overcms-sites/${site.domain.replace(/[^a-z0-9.-]/g, '')}`
+      const safeDomain = site.domain.replace(/[^a-z0-9.-]/g, '')
+      const installDir = `/opt/overcms-sites/${safeDomain}`
       try {
-        await execAsync(`cd ${installDir}/app && git fetch origin main 2>/dev/null`)
-        const { stdout } = await execAsync(`cd ${installDir}/app && git log HEAD..origin/main --oneline 2>/dev/null`)
+        const ghToken = process.env.GH_TOKEN
+        if (ghToken) {
+          await execAsync(
+            `cd ${installDir}/app && git remote set-url origin https://${ghToken}@github.com/jurfader/over-cms.git`,
+            { timeout: 10_000 }
+          )
+        }
+        await execAsync(`cd ${installDir}/app && git fetch origin main`, { timeout: 30_000 })
+        const { stdout } = await execAsync(`cd ${installDir}/app && git log HEAD..origin/main --oneline`)
         const commits = stdout.trim().split('\n').filter(Boolean)
         const { stdout: currentHash } = await execAsync(`cd ${installDir}/app && git rev-parse --short HEAD`)
         if (commits.length > 0) {
           return reply.send({ success: true, data: { hasUpdate: true, commits: commits.length, changes: commits.slice(0, 5), currentVersion: currentHash.trim(), type: 'overcms' } })
         }
         return reply.send({ success: true, data: { hasUpdate: false, currentVersion: currentHash.trim(), type: 'overcms' } })
-      } catch {
+      } catch (err: any) {
+        console.warn(`[OverCMS] check-update failed for ${safeDomain}:`, err.message)
         return reply.send({ success: true, data: { hasUpdate: false, type: 'overcms' } })
       }
     }
