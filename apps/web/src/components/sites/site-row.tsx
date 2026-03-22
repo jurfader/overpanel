@@ -8,7 +8,7 @@ import type { Site } from '@overpanel/shared'
 import {
   Globe, Shield, ShieldOff, ExternalLink,
   Trash2, MoreHorizontal, RefreshCw, Power, Settings,
-  ArrowUpCircle, Loader2,
+  ArrowUpCircle, Loader2, CloudCog,
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -195,6 +195,15 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
     onRefetch()
   }
 
+  const handleSyncDns = async () => {
+    try {
+      const result = await api.post<{ ip: string; zone: string }>(`/api/sites/${site.id}/sync-dns`, {})
+      alert(`Rekord DNS A dodany: ${site.domain} → ${result.ip} (strefa: ${result.zone})`)
+    } catch (err: any) {
+      alert(err.message || 'Błąd sync DNS')
+    }
+  }
+
   return (
     <>
       <div className="flex items-center gap-4 p-4 rounded-xl hover:bg-white/[0.03] transition-colors group">
@@ -285,6 +294,15 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
               title="Ustawienia PHP"
             >
               <Settings className="w-4 h-4" />
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={handleSyncDns}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+              title="Sync DNS Cloudflare (dodaj rekord A)"
+            >
+              <CloudCog className="w-4 h-4" />
             </button>
           )}
           <Button variant="ghost" size="sm" onClick={toggleStatus} title={site.status === 'active' ? 'Dezaktywuj' : 'Aktywuj'}>

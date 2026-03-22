@@ -376,6 +376,143 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     return reply.send({ success: true, data: updated })
   })
 
+  // POST /api/sites/sync — import sites from filesystem into DB
+  fastify.post('/sync', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const caller = getRequestUser(request)
+    if (caller.role !== 'admin') return reply.code(403).send({ success: false, error: 'Forbidden' })
+
+    const { readdir, readFile } = await import('fs/promises')
+    const { existsSync } = await import('fs')
+    let imported = 0
+
+    // 1. OverCMS installs from /opt/overcms-sites/
+    const overcmsBase = '/opt/overcms-sites'
+    if (existsSync(overcmsBase)) {
+      const entries = await readdir(overcmsBase, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        const domain = entry.name
+        const existing = await prisma.site.findUnique({ where: { domain } })
+        if (existing) continue
+
+        const portsPath = `${overcmsBase}/${domain}/ports.json`
+        const envPath = `${overcmsBase}/${domain}/app/.env`
+        if (!existsSync(portsPath)) continue
+
+        try {
+          const ports = JSON.parse(await readFile(portsPath, 'utf-8'))
+          const envRaw = existsSync(envPath) ? await readFile(envPath, 'utf-8') : ''
+          const pgPassMatch = envRaw.match(/POSTGRES_PASSWORD=(.+)/)
+          const pgPass = pgPassMatch?.[1]?.trim() ?? ''
+
+          const site = await prisma.site.create({
+            data: {
+              domain,
+              siteType: 'overcms',
+              documentRoot: `/var/www/${domain}/public`,
+              status: 'active',
+              hasSSL: true,
+              userId: caller.id,
+            },
+          })
+
+          // Register DB if not already there
+          const dbName = `overcms_${domain.replace(/[^a-z0-9]/g, '_')}`
+          const dbExists = await prisma.database.findFirst({ where: { name: dbName } })
+          if (!dbExists && pgPass) {
+            await prisma.database.create({
+              data: {
+                name: dbName,
+                engine: 'postgresql',
+                dbUser: 'overcms',
+                host: 'localhost',
+                port: ports.pgPort,
+                userId: caller.id,
+                siteId: site.id,
+                isDocker: true,
+                password: pgPass,
+              },
+            })
+          }
+          imported++
+        } catch (err: any) {
+          console.warn(`[Sync] Failed to import OverCMS ${domain}:`, err.message)
+        }
+      }
+    }
+
+    // 2. Regular sites from /etc/nginx/sites-enabled/
+    const nginxEnabled = '/etc/nginx/sites-enabled'
+    if (existsSync(nginxEnabled)) {
+      const files = await readdir(nginxEnabled)
+      for (const file of files) {
+        if (file === 'default') continue
+        const domain = file.replace(/\.conf$/, '')
+        if (!domain.includes('.')) continue
+        const existing = await prisma.site.findUnique({ where: { domain } })
+        if (existing) continue
+
+        try {
+          const configPath = `${nginxEnabled}/${file}`
+          const config = existsSync(configPath) ? await readFile(configPath, 'utf-8') : ''
+          let siteType: 'php' | 'nodejs' | 'static' | 'proxy' = 'php'
+          if (config.includes('proxy_pass')) siteType = 'proxy'
+          else if (config.includes('php-fpm')) siteType = 'php'
+          else siteType = 'static'
+
+          const docRootMatch = config.match(/root\s+([^;]+);/)
+          const documentRoot = docRootMatch?.[1]?.trim() ?? `/var/www/${domain}/public`
+
+          await prisma.site.create({
+            data: {
+              domain,
+              siteType,
+              documentRoot,
+              status: 'active',
+              userId: caller.id,
+            },
+          })
+          imported++
+        } catch (err: any) {
+          console.warn(`[Sync] Failed to import nginx site ${domain}:`, err.message)
+        }
+      }
+    }
+
+    return reply.send({ success: true, data: { imported } })
+  })
+
+  // POST /api/sites/:id/sync-dns — re-create Cloudflare DNS A record
+  fastify.post('/:id/sync-dns', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const caller = getRequestUser(request)
+    const site = await prisma.site.findUnique({ where: { id } })
+    if (!site) return reply.code(404).send({ success: false, error: 'Not found' })
+    if (caller.role !== 'admin' && site.userId !== caller.id) {
+      return reply.code(403).send({ success: false, error: 'Forbidden' })
+    }
+
+    const cfToken = await getUserCfToken(caller.id)
+    if (!cfToken) return reply.code(400).send({ success: false, error: 'Brak tokenu Cloudflare' })
+
+    try {
+      const zone = await findZoneForDomain(cfToken, site.domain)
+      if (!zone) return reply.code(400).send({ success: false, error: `Nie znaleziono strefy Cloudflare dla ${site.domain}` })
+
+      const ip = await getPublicIp()
+      await createDnsRecord(cfToken, zone.id, {
+        type: 'A',
+        name: site.domain,
+        content: ip,
+        ttl: 1,
+        proxied: true,
+      })
+      return reply.send({ success: true, data: { ip, zone: zone.name } })
+    } catch (err: any) {
+      return reply.code(500).send({ success: false, error: err.message })
+    }
+  })
+
   // DELETE /api/sites/:id
   fastify.delete('/:id', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { id } = request.params as { id: string }

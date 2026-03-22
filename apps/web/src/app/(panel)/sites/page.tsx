@@ -11,7 +11,8 @@ import { CreateSiteModal } from '@/components/sites/create-site-modal'
 import { useApi } from '@/hooks/use-api'
 import { useAuthStore } from '@/store/auth'
 import type { Site } from '@overpanel/shared'
-import { Globe, Plus, Search, RefreshCw } from 'lucide-react'
+import { Globe, Plus, Search, RefreshCw, Download } from 'lucide-react'
+import { api, ApiError } from '@/lib/api'
 
 type SiteWithUser = Site & { user?: { name: string }; _count?: { databases: number } }
 
@@ -20,6 +21,20 @@ export default function SitesPage() {
   const { data, loading, error, refetch } = useApi<SiteWithUser[]>('/api/sites')
   const [showCreate, setShowCreate] = useState(false)
   const [search, setSearch] = useState('')
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const result = await api.post<{ imported: number }>('/api/sites/sync', {})
+      refetch()
+      alert(`Synchronizacja zakończona: ${result.imported} stron zaimportowano.`)
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Błąd synchronizacji')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const sites = data ?? []
   const filtered = sites.filter((s) =>
@@ -68,6 +83,11 @@ export default function SitesPage() {
           <Button variant="secondary" size="sm" onClick={refetch}>
             <RefreshCw className="w-4 h-4" />
           </Button>
+          {user?.role === 'admin' && (
+            <Button variant="secondary" size="sm" onClick={handleSync} loading={syncing} title="Importuj strony z dysku serwera">
+              <Download className="w-4 h-4" /> Synchronizuj
+            </Button>
+          )}
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="w-4 h-4" />
             Nowa strona
