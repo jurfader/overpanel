@@ -276,13 +276,17 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       const safeDomain = site.domain.replace(/[^a-z0-9.-]/g, '')
       const installDir = `/opt/overcms-sites/${safeDomain}`
       try {
-        // Use token from env or fall back to the URL stored in .git/config (set during clone)
+        // Build authenticated fetch URL; x-access-token:<PAT> works without TTY prompt
         const ghToken = process.env.GH_TOKEN
         const remoteUrl = ghToken
-          ? `https://${ghToken}@github.com/jurfader/over-cms.git`
+          ? `https://x-access-token:${ghToken}@github.com/jurfader/over-cms.git`
           : (await execAsync(`git -C ${installDir}/app remote get-url origin`, { timeout: 5_000 })).stdout.trim()
+            .replace(/^https:\/\/([^:@]+)@/, 'https://x-access-token:$1@') // fix stored token format
 
-        await execAsync(`git -C ${installDir}/app fetch ${remoteUrl} main`, { timeout: 30_000 })
+        await execAsync(`git -C ${installDir}/app fetch ${remoteUrl} main`, {
+          timeout: 30_000,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' },
+        })
         const { stdout } = await execAsync(`git -C ${installDir}/app log HEAD..FETCH_HEAD --oneline`)
         const commits = stdout.trim().split('\n').filter(Boolean)
         const { stdout: currentHash } = await execAsync(`git -C ${installDir}/app rev-parse --short HEAD`)
@@ -339,7 +343,13 @@ export async function sitesRoutes(fastify: FastifyInstance) {
 
       setImmediate(async () => {
         try {
-          await execAsync(`cd ${installDir}/app && git pull origin main`, { timeout: 60_000 })
+          const ghToken = process.env.GH_TOKEN
+          const pullUrl = ghToken
+            ? `https://x-access-token:${ghToken}@github.com/jurfader/over-cms.git`
+            : (await execAsync(`git -C ${installDir}/app remote get-url origin`)).stdout.trim()
+              .replace(/^https:\/\/([^:@]+)@/, 'https://x-access-token:$1@')
+          const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' }
+          await execAsync(`git -C ${installDir}/app fetch ${pullUrl} main && git -C ${installDir}/app reset --hard FETCH_HEAD`, { timeout: 60_000, env: gitEnv })
           await execAsync(`${dc} up -d --build`, { timeout: 600_000 })
           // Re-run migration from host
           const envRaw = await (await import('fs/promises')).readFile(`${installDir}/app/.env`, 'utf-8')

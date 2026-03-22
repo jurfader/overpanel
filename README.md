@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/version-1.0.19-E91E8C?style=for-the-badge" alt="Version 1.0.19" />
+<img src="https://img.shields.io/badge/version-1.0.20-E91E8C?style=for-the-badge" alt="Version 1.0.20" />
 <img src="https://img.shields.io/badge/ubuntu-22.04%20%7C%2024.04-9B26D9?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
 <img src="https://img.shields.io/badge/license-proprietary-0A0A0F?style=for-the-badge" alt="License" />
 
