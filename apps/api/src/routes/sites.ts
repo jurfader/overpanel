@@ -373,6 +373,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     const schema = z.object({
       status: z.enum(['active', 'inactive']).optional(),
       phpVersion: z.enum(['7.4', '8.0', '8.1', '8.2', '8.3']).optional(),
+      siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms']).optional(),
     })
     const body = schema.safeParse(request.body)
     if (!body.success) return reply.code(400).send({ success: false, error: 'Invalid input' })
@@ -401,49 +402,55 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       for (const entry of entries) {
         if (!entry.isDirectory()) continue
         const domain = entry.name
-        const existing = await prisma.site.findUnique({ where: { domain } })
-        if (existing) continue
-
         const portsPath = `${overcmsBase}/${domain}/ports.json`
         const envPath = `${overcmsBase}/${domain}/app/.env`
-        if (!existsSync(portsPath)) continue
 
         try {
-          const ports = JSON.parse(await readFile(portsPath, 'utf-8'))
-          const envRaw = existsSync(envPath) ? await readFile(envPath, 'utf-8') : ''
-          const pgPassMatch = envRaw.match(/POSTGRES_PASSWORD=(.+)/)
-          const pgPass = pgPassMatch?.[1]?.trim() ?? ''
+          const existing = await prisma.site.findUnique({ where: { domain } })
 
-          const site = await prisma.site.create({
-            data: {
-              domain,
-              siteType: 'overcms',
-              documentRoot: `/var/www/${domain}/public`,
-              status: 'active',
-              hasSSL: true,
-              userId: caller.id,
-            },
-          })
+          // Fix wrong siteType if already in DB
+          if (existing && existing.siteType !== 'overcms') {
+            await prisma.site.update({ where: { domain }, data: { siteType: 'overcms' } })
+          }
 
-          // Register DB if not already there
-          const dbName = `overcms_${domain.replace(/[^a-z0-9]/g, '_')}`
-          const dbExists = await prisma.database.findFirst({ where: { name: dbName } })
-          if (!dbExists && pgPass) {
-            await prisma.database.create({
+          if (!existing) {
+            const site = await prisma.site.create({
               data: {
-                name: dbName,
-                engine: 'postgresql',
-                dbUser: 'overcms',
-                host: 'localhost',
-                port: ports.pgPort,
+                domain,
+                siteType: 'overcms',
+                documentRoot: `/var/www/${domain}/public`,
+                status: 'active',
+                hasSSL: true,
                 userId: caller.id,
-                siteId: site.id,
-                isDocker: true,
-                password: pgPass,
               },
             })
+
+            // Register DB if ports.json available
+            if (existsSync(portsPath)) {
+              const ports = JSON.parse(await readFile(portsPath, 'utf-8'))
+              const envRaw = existsSync(envPath) ? await readFile(envPath, 'utf-8') : ''
+              const pgPassMatch = envRaw.match(/POSTGRES_PASSWORD=(.+)/)
+              const pgPass = pgPassMatch?.[1]?.trim() ?? ''
+              const dbName = `overcms_${domain.replace(/[^a-z0-9]/g, '_')}`
+              const dbExists = await prisma.database.findFirst({ where: { name: dbName } })
+              if (!dbExists && pgPass) {
+                await prisma.database.create({
+                  data: {
+                    name: dbName,
+                    engine: 'postgresql',
+                    dbUser: 'overcms',
+                    host: 'localhost',
+                    port: ports.pgPort,
+                    userId: caller.id,
+                    siteId: site.id,
+                    isDocker: true,
+                    password: pgPass,
+                  },
+                })
+              }
+            }
+            imported++
           }
-          imported++
         } catch (err: any) {
           console.warn(`[Sync] Failed to import OverCMS ${domain}:`, err.message)
         }
