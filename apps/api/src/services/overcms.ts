@@ -227,7 +227,7 @@ services:
     ports:
       - "${portalPort}:3004"
   license-server:
-    profiles: ["disabled"]
+    container_name: overcms-license-${containerPrefix}
   traefik:
     profiles: ["disabled"]
 `.trim()
