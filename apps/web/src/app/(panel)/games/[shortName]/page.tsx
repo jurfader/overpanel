@@ -33,6 +33,7 @@ import {
   RefreshCw,
   Gamepad2,
   ExternalLink,
+  X,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
