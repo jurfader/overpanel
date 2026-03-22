@@ -179,12 +179,15 @@ NEXT_PUBLIC_API_URL=https://${domain}
 
 # License — centralny serwer licencji (nie lokalny kontener)
 LICENSE_SERVER_URL=https://license.overcms.pl
+LICENSE_DOMAIN=license.overcms.pl
 OVERCMS_LICENSE_KEY=${licenseKey || ''}
 OVERCMS_INSTALL_ID=${randomBytes(16).toString('hex')}
 SITE_URL=https://${domain}
 
 # Portal
 PORTAL_DOMAIN=${domain}
+NEXT_PUBLIC_SITE_URL=https://${domain}
+NEXT_PUBLIC_LICENSE_SERVER_URL=https://license.overcms.pl
 
 # SSL
 ACME_EMAIL=${adminEmail}
@@ -224,6 +227,11 @@ services:
       - "${adminPort}:3001"
   portal:
     container_name: overcms-portal-${containerPrefix}
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: https://${domain}
+        NEXT_PUBLIC_SITE_URL: https://${domain}
+        NEXT_PUBLIC_LICENSE_SERVER_URL: https://license.overcms.pl
     ports:
       - "${portalPort}:3004"
   license-server:
@@ -232,6 +240,7 @@ services:
     command: ["sh", "-c", "sleep infinity"]
     restart: "no"
     entrypoint: []
+    depends_on: {}
   traefik:
     profiles: ["disabled"]
 `.trim()
