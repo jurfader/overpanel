@@ -293,9 +293,9 @@ COMPEOF`)
     await runLong(`cd ${installDir}/app && NODE_ENV=development pnpm install`, 300_000)
   })
 
-  // 7b. Run database migration across all workspaces
+  // 7b. Run database migration (drizzle-kit push from root package.json)
   await logStep('Migracja bazy danych', async () => {
-    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm -r --if-present run db:push`, 120_000)
+    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm run db:push`, 120_000)
   })
 
   // 8. Seed admin user from host (source .ts files not in prod container)
