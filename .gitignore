@@ -10,3 +10,7 @@ build/
 .turbo/
 prisma/dev.db
 prisma/dev.db-journal
+
+# Panel database
+panel.db
+panel.db-journal
