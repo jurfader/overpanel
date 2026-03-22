@@ -41,7 +41,9 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
           const status = await getGameServerStatus(srv.shortName).catch(() => ({ running: false }))
           return {
             ...srv,
+            name: template?.name ?? srv.serverName,
             category: template?.category ?? 'Inne',
+            steamAppId: template?.steamAppId ?? 0,
             address: srv.domain ? `${srv.domain}:${srv.port}` : `<IP>:${srv.port}`,
             ...status,
           }

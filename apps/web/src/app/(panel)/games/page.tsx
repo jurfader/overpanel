@@ -32,6 +32,7 @@ interface GameServerTemplate {
   category: string
   defaultPort: number
   protocol: string
+  steamAppId: number
   installed: boolean
 }
 
@@ -40,6 +41,7 @@ interface InstalledServer {
   serverName: string
   name: string
   category: string
+  steamAppId: number
   domain: string | null
   port: number
   address: string
@@ -65,13 +67,14 @@ interface Toast {
 
 let toastCounter = 0
 
-const CATEGORIES = ['Wszystkie', 'FPS', 'Survival', 'Sandbox', 'RPG', 'VoIP', 'Inne'] as const
+const CATEGORIES = ['Wszystkie', 'FPS', 'Survival', 'Sandbox', 'Racing', 'RPG', 'VoIP', 'Inne'] as const
 
 function getCategoryColor(cat: string): 'info' | 'success' | 'warning' | 'brand' | 'error' | 'neutral' {
   const map: Record<string, 'info' | 'success' | 'warning' | 'brand' | 'error' | 'neutral'> = {
     FPS: 'error',
     Survival: 'success',
     Sandbox: 'warning',
+    Racing: 'info',
     RPG: 'brand',
     VoIP: 'info',
     Inne: 'neutral',
@@ -299,13 +302,31 @@ export default function GameServersPage() {
                     <CardContent>
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            server.running
-                              ? 'bg-green-500/10 border border-green-500/20'
-                              : 'bg-white/5 border border-white/10'
-                          }`}>
-                            <Gamepad2 className={`w-5 h-5 ${server.running ? 'text-green-400' : 'text-[var(--text-muted)]'}`} />
-                          </div>
+                          {server.steamAppId > 0 ? (
+                            <>
+                              <img
+                                src={`https://cdn.cloudflare.steamstatic.com/steam/apps/${server.steamAppId}/capsule_sm_120.jpg`}
+                                alt={server.name}
+                                className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden') }}
+                              />
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 hidden ${
+                                server.running
+                                  ? 'bg-green-500/10 border border-green-500/20'
+                                  : 'bg-white/5 border border-white/10'
+                              }`}>
+                                <Gamepad2 className={`w-5 h-5 ${server.running ? 'text-green-400' : 'text-[var(--text-muted)]'}`} />
+                              </div>
+                            </>
+                          ) : (
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                              server.running
+                                ? 'bg-green-500/10 border border-green-500/20'
+                                : 'bg-white/5 border border-white/10'
+                            }`}>
+                              <Gamepad2 className={`w-5 h-5 ${server.running ? 'text-green-400' : 'text-[var(--text-muted)]'}`} />
+                            </div>
+                          )}
                           <div>
                             <h3 className="text-sm font-semibold text-[var(--text-primary)]">{server.serverName || server.name}</h3>
                             <p className="text-xs text-[var(--text-muted)] font-mono">{server.address}</p>
@@ -425,9 +446,23 @@ export default function GameServersPage() {
                   >
                     <CardContent>
                       <div className="flex items-start gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                          <Gamepad2 className="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
-                        </div>
+                        {template.steamAppId > 0 ? (
+                          <>
+                            <img
+                              src={`https://cdn.cloudflare.steamstatic.com/steam/apps/${template.steamAppId}/capsule_sm_120.jpg`}
+                              alt={template.name}
+                              className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden') }}
+                            />
+                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 hidden">
+                              <Gamepad2 className="w-5 h-5 text-[var(--text-muted)]" />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                            <Gamepad2 className="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
+                          </div>
+                        )}
                         <div className="min-w-0 flex-1">
                           <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">{template.name}</h3>
                           <p className="text-[11px] text-[var(--text-muted)]">{template.shortName}</p>
