@@ -11,6 +11,7 @@ import {
   GAME_SERVER_TEMPLATES,
   installGameServer,
   installModpack,
+  updateServerRam,
   startGameServer,
   stopGameServer,
   restartGameServer,
@@ -206,6 +207,7 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
     password: z.string().max(100).optional(),
     version: z.string().max(20).regex(/^[0-9.]*$/).optional(),
     serverType: z.enum(['vanilla', 'paper', 'purpur', 'fabric', 'forge']).optional(),
+    maxRam: z.number().int().min(512).max(65536).optional(),
   })
 
   fastify.post('/install', { preHandler: [authMiddleware] }, async (request, reply) => {
@@ -245,6 +247,7 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
           cfToken: cfToken ?? undefined,
           version,
           serverType,
+          maxRam: body.data.maxRam,
         })
       } catch (err) {
         console.error(`[GameServers] Install failed for ${shortName}:`, err)
@@ -558,6 +561,24 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
       return reply.send({ success: true, data: null })
     } catch (err: any) {
       console.error(`[GameServers] mod delete error for ${shortName}:`, err)
+      return reply.code(500).send({ success: false, error: err.message })
+    }
+  })
+
+  // PUT /api/game-servers/:shortName/ram — update Java memory allocation
+  fastify.put('/:shortName/ram', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { shortName } = request.params as { shortName: string }
+    if (!SHORT_NAME_RE.test(shortName)) {
+      return reply.code(400).send({ success: false, error: 'Nieprawidłowa nazwa serwera' })
+    }
+    const body = z.object({ ram: z.number().int().min(512).max(65536) }).safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ success: false, error: 'RAM musi być liczbą między 512 a 65536 MB' })
+    }
+    try {
+      await updateServerRam(shortName, body.data.ram)
+      return reply.send({ success: true, data: null })
+    } catch (err: any) {
       return reply.code(500).send({ success: false, error: err.message })
     }
   })

@@ -251,10 +251,11 @@ export interface GameInstallOptions {
   cfToken?: string      // Cloudflare API token for DNS
   version?: string      // MC version e.g. "1.21.4"
   serverType?: string   // "vanilla"|"paper"|"purpur"|"fabric"|"forge"
+  maxRam?: number       // MB, e.g. 2048
 }
 
 export async function installGameServer(options: GameInstallOptions): Promise<void> {
-  const { shortName, serverName, domain, port, maxPlayers, password, cfToken, version, serverType } = options
+  const { shortName, serverName, domain, port, maxPlayers, password, cfToken, version, serverType, maxRam } = options
   const template = GAME_SERVER_TEMPLATES.find(t => t.shortName === shortName)
   const safe = shortName.replace(/[^a-z0-9]/g, '')
   const installDir = `${GAME_SERVERS_BASE}/${safe}`
@@ -322,6 +323,14 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
   await logStep(`Konfiguracja serwera: ${safe}`, async () => {
     await runLong(`su - ${GSM_USER} -c "cd ${installDir} && bash linuxgsm.sh ${safe}"`, 120_000)
   })
+
+  // 5b. Write RAM config (javamem) for Java-based servers
+  const javaServersForRam = ['mcserver', 'mcbserver', 'pmcserver', 'vpmcserver', 'wmcserver']
+  if (javaServersForRam.includes(safe) && maxRam && maxRam >= 512) {
+    await logStep(`Ustawianie pamięci RAM: ${maxRam} MB`, async () => {
+      await setServerRam(safe, installDir, maxRam)
+    })
+  }
 
   // 6. Run server install (downloads game files — can be very slow)
   await logStep('Pobieranie plików gry (to może potrwać kilka minut...)', async () => {
@@ -458,6 +467,7 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
       password: password ?? null,
       version: version ?? null,
       serverType: serverType ?? 'vanilla',
+      maxRam: maxRam ?? null,
       installedAt: new Date().toISOString(),
     }, null, 2)
     await writeFile(`${installDir}/overpanel-config.json`, config, 'utf-8')
@@ -532,6 +542,7 @@ export interface InstalledServerInfo {
   port: number
   maxPlayers: number | null
   password: string | null
+  maxRam: number | null
 }
 
 export async function getInstalledServers(): Promise<InstalledServerInfo[]> {
@@ -553,12 +564,43 @@ export async function getInstalledServers(): Promise<InstalledServerInfo[]> {
         port: config.port ?? template?.defaultPort ?? 27015,
         maxPlayers: config.maxPlayers ?? null,
         password: config.password ?? null,
+        maxRam: config.maxRam ?? null,
       })
     }
     return installed
   } catch {
     return []
   }
+}
+
+// ── RAM management ──────────────────────────────────────────────────────────
+
+async function setServerRam(safe: string, installDir: string, ramMb: number): Promise<void> {
+  const lgsmCfgDir = `${installDir}/lgsm/config-lgsm/${safe}`
+  await run(`mkdir -p "${lgsmCfgDir}"`)
+  const cfgPath = `${lgsmCfgDir}/${safe}.cfg`
+  let existing = ''
+  try { existing = await readFile(cfgPath, 'utf-8') } catch {}
+  const newLine = `javamem="${ramMb}M"`
+  if (existing.includes('javamem=')) {
+    existing = existing.replace(/javamem="[^"]*"/, newLine)
+  } else {
+    existing = existing.trimEnd() + `\n${newLine}\n`
+  }
+  await writeFile(cfgPath, existing, 'utf-8')
+  await run(`chown -R ${GSM_USER}:${GSM_USER} "${lgsmCfgDir}"`)
+}
+
+export async function updateServerRam(shortName: string, ramMb: number): Promise<void> {
+  const safe = shortName.replace(/[^a-z0-9]/g, '')
+  const installDir = `${GAME_SERVERS_BASE}/${safe}`
+  await setServerRam(safe, installDir, ramMb)
+  // Persist to overpanel-config.json
+  const configPath = `${installDir}/overpanel-config.json`
+  let config: any = {}
+  try { config = JSON.parse(await readFile(configPath, 'utf-8')) } catch {}
+  config.maxRam = ramMb
+  await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
 }
 
 // ── Modpack installer ────────────────────────────────────────────────────────

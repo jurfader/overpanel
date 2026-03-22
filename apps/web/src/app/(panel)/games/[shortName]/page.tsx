@@ -48,6 +48,7 @@ interface ServerInfo {
   address: string
   running: boolean
   pid?: number
+  maxRam?: number | null
 }
 
 interface ConfigData {
@@ -170,6 +171,11 @@ export default function GameServerManagePage() {
   const logEndRef = useRef<HTMLDivElement>(null)
   const logPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // RAM edit state
+  const [editingRam, setEditingRam] = useState(false)
+  const [ramValue, setRamValue] = useState<number>(2048)
+  const [savingRam, setSavingRam] = useState(false)
+
   // Server info
   const { data: serverInfo, loading: serverLoading, refetch: refetchServer } = useApi<ServerInfo>(
     `/api/game-servers/installed/${shortName}`
@@ -224,6 +230,20 @@ export default function GameServerManagePage() {
       navigator.clipboard.writeText(serverInfo.address)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleSaveRam = async () => {
+    setSavingRam(true)
+    try {
+      await api.put(`/api/game-servers/${shortName}/ram`, { ram: ramValue })
+      addToast(`RAM ustawiony na ${ramValue >= 1024 ? `${ramValue / 1024} GB` : `${ramValue} MB`}`, 'success')
+      setEditingRam(false)
+      refetchServer()
+    } catch (err: any) {
+      addToast(err.message || 'Nie udało się zapisać RAM', 'error')
+    } finally {
+      setSavingRam(false)
     }
   }
 
@@ -585,6 +605,59 @@ export default function GameServerManagePage() {
                       {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                     {(livePid ?? serverInfo.pid) && <span>PID: {livePid ?? serverInfo.pid}</span>}
+                    {serverInfo.maxRam && !editingRam && (
+                      <button
+                        onClick={() => { setRamValue(serverInfo.maxRam!); setEditingRam(true) }}
+                        className="hover:text-[var(--text-secondary)] transition-colors"
+                        title="Zmień RAM"
+                      >
+                        RAM: {serverInfo.maxRam >= 1024 ? `${serverInfo.maxRam / 1024} GB` : `${serverInfo.maxRam} MB`}
+                      </button>
+                    )}
+                    {!serverInfo.maxRam && !editingRam && (
+                      <button
+                        onClick={() => { setRamValue(2048); setEditingRam(true) }}
+                        className="hover:text-[var(--text-secondary)] transition-colors"
+                        title="Ustaw RAM"
+                      >
+                        RAM: —
+                      </button>
+                    )}
+                    {editingRam && (
+                      <div className="flex items-center gap-1.5">
+                        <span>RAM:</span>
+                        <select
+                          value={ramValue}
+                          onChange={e => setRamValue(Number(e.target.value))}
+                          className="bg-white/5 border border-white/10 rounded text-xs px-1 py-0.5"
+                        >
+                          <option value={512}>512 MB</option>
+                          <option value={1024}>1 GB</option>
+                          <option value={2048}>2 GB</option>
+                          <option value={3072}>3 GB</option>
+                          <option value={4096}>4 GB</option>
+                          <option value={6144}>6 GB</option>
+                          <option value={8192}>8 GB</option>
+                          <option value={12288}>12 GB</option>
+                          <option value={16384}>16 GB</option>
+                        </select>
+                        <button
+                          onClick={handleSaveRam}
+                          disabled={savingRam}
+                          className="text-green-400 hover:text-green-300 disabled:opacity-50 transition-colors"
+                          title="Zapisz"
+                        >
+                          {savingRam ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => setEditingRam(false)}
+                          className="hover:text-[var(--text-secondary)] transition-colors"
+                          title="Anuluj"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -112,6 +112,7 @@ export default function GameServersPage() {
   const [formPassword, setFormPassword] = useState('')
   const [formVersion, setFormVersion] = useState('')
   const [formServerType, setFormServerType] = useState('vanilla')
+  const [formRam, setFormRam] = useState('2048')
 
   // Confirm uninstall modal
   const [uninstallTarget, setUninstallTarget] = useState<InstalledServer | null>(null)
@@ -193,6 +194,7 @@ export default function GameServersPage() {
     setFormPassword('')
     setFormVersion('')
     setFormServerType('vanilla')
+    setFormRam('2048')
   }
 
   const handleStartInstall = async () => {
@@ -210,6 +212,7 @@ export default function GameServersPage() {
     if (formPassword) body.password = formPassword
     if (formVersion) body.version = formVersion
     if (formServerType && formServerType !== 'vanilla') body.serverType = formServerType
+    if (isMcServer && formRam) body.maxRam = parseInt(formRam, 10)
 
     try {
       await api.post('/api/game-servers/install', body)
@@ -576,6 +579,24 @@ export default function GameServersPage() {
                             <option value="forge">Forge (mody Forge)</option>
                           </select>
                           <p className="text-[10px] text-[var(--text-muted)] mt-1">Paper/Purpur — obsługują pluginy Bukkit/Spigot. Fabric/Forge — do modów.</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Pamięć RAM (Java heap)</label>
+                          <select
+                            value={formRam}
+                            onChange={e => setFormRam(e.target.value)}
+                            className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]/40 transition-all cursor-pointer"
+                          >
+                            <option value="512">512 MB</option>
+                            <option value="1024">1 GB</option>
+                            <option value="2048">2 GB (zalecane)</option>
+                            <option value="3072">3 GB</option>
+                            <option value="4096">4 GB</option>
+                            <option value="6144">6 GB</option>
+                            <option value="8192">8 GB</option>
+                            <option value="12288">12 GB</option>
+                            <option value="16384">16 GB</option>
+                          </select>
                         </div>
                       </>
                     )}
