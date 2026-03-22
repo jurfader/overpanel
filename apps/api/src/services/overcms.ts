@@ -252,6 +252,17 @@ ${composeOverride}
 COMPEOF`)
   })
 
+  // 4b. Patch portal Dockerfile — add missing COPY for tsconfig.base.json
+  await logStep('Przygotowanie Dockerfile portalu', async () => {
+    const portalDockerfile = `${installDir}/app/apps/portal/Dockerfile`
+    if (existsSync(portalDockerfile)) {
+      // Insert COPY tsconfig.base.json before the portal build step
+      await run(`sed -i '/COPY apps\\/portal/a COPY tsconfig.base.json ./' ${portalDockerfile}`)
+      // Also copy shared packages if referenced
+      await run(`sed -i '/COPY tsconfig.base.json/a COPY packages ./packages' ${portalDockerfile}`)
+    }
+  })
+
   const dc = `cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml`
 
   // 5. Build and start containers (long timeout — Docker builds are slow)
