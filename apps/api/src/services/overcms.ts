@@ -228,6 +228,10 @@ services:
       - "${portalPort}:3004"
   license-server:
     container_name: overcms-license-${containerPrefix}
+    image: busybox
+    command: ["sh", "-c", "sleep infinity"]
+    restart: "no"
+    entrypoint: []
   traefik:
     profiles: ["disabled"]
 `.trim()
