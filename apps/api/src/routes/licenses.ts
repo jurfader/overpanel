@@ -107,4 +107,11 @@ export async function licensesRoutes(fastify: FastifyInstance) {
     const result = await proxyToLicenseServer(`/admin/licenses/${encodeURIComponent(key)}/resend-email`, 'POST')
     return reply.code(result.status).send(result.data)
   })
+
+  // POST /api/licenses/:key/activate — proxy activation to license server
+  fastify.post('/:key/activate', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const result = await proxyToLicenseServer(`/api/licenses/${encodeURIComponent(key)}/activate`, 'POST', request.body)
+    return reply.code(result.status).send(result.data)
+  })
 }

@@ -77,6 +77,28 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ success: false, error: 'Klucz licencyjny jest wymagany do instalacji OverCMS' })
     }
 
+    // Walidacja klucza licencyjnego na serwerze licencji przed instalacją
+    if (siteType === 'overcms' && body.data.licenseKey) {
+      const licServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://51.38.137.199:3002'
+      try {
+        const licRes = await fetch(`${licServerUrl}/customer/${encodeURIComponent(body.data.licenseKey.trim())}`)
+        if (!licRes.ok) {
+          return reply.code(400).send({ success: false, error: 'Klucz licencyjny nie istnieje lub jest nieważny' })
+        }
+        const licData = await licRes.json() as any
+        const lic = licData?.data ?? licData
+        if (lic.status !== 'active') {
+          return reply.code(400).send({ success: false, error: `Licencja jest ${lic.status === 'revoked' ? 'odwołana' : lic.status === 'expired' ? 'wygasła' : 'nieaktywna'}` })
+        }
+        if (lic.maxInstallations && lic.activeCount >= lic.maxInstallations) {
+          return reply.code(400).send({ success: false, error: `Osiągnięto limit instalacji (${lic.maxInstallations})` })
+        }
+      } catch (err: any) {
+        console.warn('[License] Validation failed:', err.message)
+        // Nie blokuj instalacji gdy serwer licencji jest niedostępny
+      }
+    }
+
     // Klient może tworzyć tylko dla siebie
     const ownerId = caller.role === 'admin' && userId ? userId : caller.id
 
