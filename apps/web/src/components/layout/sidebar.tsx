@@ -137,11 +137,7 @@ export function Sidebar() {
         <div className="px-5 py-5 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
             {/* Logo icon */}
-            <div className="w-9 h-9 rounded-xl gradient-brand flex items-center justify-center glow-pink flex-shrink-0">
-              <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="currentColor">
-                <path d="M12 2L8.5 8.5H2L7 13l-2 7 7-4.5L19 20l-2-7 5-4.5h-6.5L12 2z" />
-              </svg>
-            </div>
+            <img src="/logo.png" alt="OVERPANEL" className="w-9 h-9 rounded-xl flex-shrink-0" />
             <div>
               <span className="text-base font-bold gradient-brand-text">OVERPANEL</span>
               <p className="text-[10px] text-[var(--text-muted)] -mt-0.5">VPS Control Panel</p>
