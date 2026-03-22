@@ -276,24 +276,23 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       const safeDomain = site.domain.replace(/[^a-z0-9.-]/g, '')
       const installDir = `/opt/overcms-sites/${safeDomain}`
       try {
+        // Use token from env or fall back to the URL stored in .git/config (set during clone)
         const ghToken = process.env.GH_TOKEN
-        if (ghToken) {
-          await execAsync(
-            `cd ${installDir}/app && git remote set-url origin https://${ghToken}@github.com/jurfader/over-cms.git`,
-            { timeout: 10_000 }
-          )
-        }
-        await execAsync(`cd ${installDir}/app && git fetch origin main`, { timeout: 30_000 })
-        const { stdout } = await execAsync(`cd ${installDir}/app && git log HEAD..origin/main --oneline`)
+        const remoteUrl = ghToken
+          ? `https://${ghToken}@github.com/jurfader/over-cms.git`
+          : (await execAsync(`git -C ${installDir}/app remote get-url origin`, { timeout: 5_000 })).stdout.trim()
+
+        await execAsync(`git -C ${installDir}/app fetch ${remoteUrl} main`, { timeout: 30_000 })
+        const { stdout } = await execAsync(`git -C ${installDir}/app log HEAD..FETCH_HEAD --oneline`)
         const commits = stdout.trim().split('\n').filter(Boolean)
-        const { stdout: currentHash } = await execAsync(`cd ${installDir}/app && git rev-parse --short HEAD`)
+        const { stdout: currentHash } = await execAsync(`git -C ${installDir}/app rev-parse --short HEAD`)
         if (commits.length > 0) {
           return reply.send({ success: true, data: { hasUpdate: true, commits: commits.length, changes: commits.slice(0, 5), currentVersion: currentHash.trim(), type: 'overcms' } })
         }
         return reply.send({ success: true, data: { hasUpdate: false, currentVersion: currentHash.trim(), type: 'overcms' } })
       } catch (err: any) {
         console.warn(`[OverCMS] check-update failed for ${safeDomain}:`, err.message)
-        return reply.send({ success: true, data: { hasUpdate: false, type: 'overcms' } })
+        return reply.send({ success: true, data: { hasUpdate: false, type: 'overcms', error: err.message } })
       }
     }
 
