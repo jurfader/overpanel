@@ -25,7 +25,7 @@ OVERPANEL to autorski panel hostingowy zaprojektowany od podstaw z myślą o est
 ## Instalacja
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/jurfader/overpanel/main/install.sh)
+apt install -y curl && bash <(curl -sSL https://raw.githubusercontent.com/jurfader/overpanel/main/install.sh)
 ```
 
 Instalator automatycznie:
