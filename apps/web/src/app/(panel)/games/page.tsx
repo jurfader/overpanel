@@ -30,13 +30,19 @@ interface GameServerTemplate {
   name: string
   shortName: string
   category: string
+  defaultPort: number
+  protocol: string
   installed: boolean
 }
 
 interface InstalledServer {
   shortName: string
+  serverName: string
   name: string
   category: string
+  domain: string | null
+  port: number
+  address: string
   running: boolean
   pid?: number
 }
@@ -84,13 +90,21 @@ export default function GameServersPage() {
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('Wszystkie')
 
-  // Install modal
+  // Install modal — 2 steps: config form → progress terminal
   const [installTarget, setInstallTarget] = useState<GameServerTemplate | null>(null)
+  const [installPhase, setInstallPhase] = useState<'config' | 'progress'>('config')
   const [installLog, setInstallLog] = useState<string[]>([])
   const [installStatus, setInstallStatus] = useState<'idle' | 'running' | 'success' | 'failed'>('idle')
   const [installStep, setInstallStep] = useState('')
   const logEndRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Install form fields
+  const [formServerName, setFormServerName] = useState('')
+  const [formDomain, setFormDomain] = useState('')
+  const [formPort, setFormPort] = useState('')
+  const [formMaxPlayers, setFormMaxPlayers] = useState('')
+  const [formPassword, setFormPassword] = useState('')
 
   // Confirm uninstall modal
   const [uninstallTarget, setUninstallTarget] = useState<InstalledServer | null>(null)
@@ -153,24 +167,42 @@ export default function GameServersPage() {
     }
   }
 
-  const handleInstall = async (template: GameServerTemplate) => {
+  const handleInstall = (template: GameServerTemplate) => {
     setInstallTarget(template)
+    setInstallPhase('config')
+    setInstallStatus('idle')
+    setFormServerName(template.name)
+    setFormDomain('')
+    setFormPort(String(template.defaultPort))
+    setFormMaxPlayers('')
+    setFormPassword('')
+  }
+
+  const handleStartInstall = async () => {
+    if (!installTarget) return
+    setInstallPhase('progress')
     setInstallLog(['Rozpoczynanie instalacji...'])
     setInstallStatus('running')
     setInstallStep('')
 
+    const body: Record<string, unknown> = { shortName: installTarget.shortName }
+    if (formServerName) body.serverName = formServerName
+    if (formDomain) body.domain = formDomain
+    if (formPort) body.port = parseInt(formPort, 10)
+    if (formMaxPlayers) body.maxPlayers = parseInt(formMaxPlayers, 10)
+    if (formPassword) body.password = formPassword
+
     try {
-      await api.post('/api/game-servers/install', { shortName: template.shortName })
+      await api.post('/api/game-servers/install', body)
     } catch (err: any) {
       setInstallLog(['Blad: ' + (err.message || 'Nie mozna uruchomic instalacji')])
       setInstallStatus('failed')
       return
     }
 
-    // Poll for install status
     pollRef.current = setInterval(async () => {
       try {
-        const res = await api.get<InstallStatus | null>(`/api/game-servers/install-status/${template.shortName}`)
+        const res = await api.get<InstallStatus | null>(`/api/game-servers/install-status/${installTarget.shortName}`)
         if (res) {
           setInstallLog(res.log)
           setInstallStep(res.step)
@@ -184,9 +216,7 @@ export default function GameServersPage() {
             }
           }
         }
-      } catch {
-        // API temporarily unreachable
-      }
+      } catch {}
     }, 2000)
   }
 
@@ -277,8 +307,8 @@ export default function GameServersPage() {
                             <Gamepad2 className={`w-5 h-5 ${server.running ? 'text-green-400' : 'text-[var(--text-muted)]'}`} />
                           </div>
                           <div>
-                            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{server.name}</h3>
-                            <p className="text-xs text-[var(--text-muted)]">{server.shortName}</p>
+                            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{server.serverName || server.name}</h3>
+                            <p className="text-xs text-[var(--text-muted)] font-mono">{server.address}</p>
                           </div>
                         </div>
                         <Badge variant={server.running ? 'success' : 'neutral'}>
@@ -431,94 +461,109 @@ export default function GameServersPage() {
         )}
       </main>
 
-      {/* ── Install progress modal ───────────────────────────────────────────── */}
+      {/* ── Install modal (config form → progress) ─────────────────────────── */}
       {installTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleCloseInstallModal} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={installPhase === 'config' || installStatus !== 'running' ? handleCloseInstallModal : undefined} />
           <div className="relative glass-card rounded-2xl border border-white/10 shadow-2xl w-full max-w-[600px] flex flex-col" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
             {/* Header */}
             <div className="flex-shrink-0 flex items-center justify-between px-6 py-5 border-b border-white/[0.06]">
               <div>
                 <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                  Instalacja: {installTarget.name}
+                  {installPhase === 'config' ? 'Konfiguracja serwera' : 'Instalacja'}: {installTarget.name}
                 </h2>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">{installTarget.shortName}</p>
               </div>
-              {installStatus !== 'running' && (
-                <button
-                  onClick={handleCloseInstallModal}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
-                >
+              {(installPhase === 'config' || installStatus !== 'running') && (
+                <button onClick={handleCloseInstallModal} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all">
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Status header */}
-              <div className="flex items-center gap-3">
-                <div className={`w-2.5 h-2.5 rounded-full ${
-                  installStatus === 'running' ? 'bg-amber-400 animate-pulse' :
-                  installStatus === 'success' ? 'bg-green-400' :
-                  'bg-red-400'
-                }`} />
-                <span className="text-sm font-medium text-[var(--text-secondary)]">
-                  {installStatus === 'running' ? installStep || 'Uruchamianie...' :
-                   installStatus === 'success' ? 'Instalacja zakonczona' :
-                   'Instalacja nieudana'}
-                </span>
-                {installStatus === 'running' && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-auto" />}
-              </div>
-
-              {/* Terminal log */}
-              <div
-                className="h-80 overflow-y-auto rounded-xl p-4 font-mono text-xs leading-relaxed border border-white/[0.06]"
-                style={{ backgroundColor: '#0a0a0f' }}
-              >
-                {installLog.map((line, i) => (
-                  <div
-                    key={i}
-                    className={`whitespace-pre-wrap break-all ${
-                      line.startsWith('\u2713') ? 'text-green-400' :
-                      line.startsWith('\u2717') ? 'text-red-400' :
-                      line.startsWith('>') ? 'text-amber-400' :
-                      'text-[var(--text-muted)]'
-                    }`}
-                  >
-                    {line}
+              {installPhase === 'config' ? (
+                /* ── Config form ──────────────────────────────────────── */
+                <>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Nazwa serwera</label>
+                      <input className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all" value={formServerName} onChange={e => setFormServerName(e.target.value)} placeholder="Mój serwer" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Subdomena (opcjonalna)</label>
+                      <input className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all" value={formDomain} onChange={e => setFormDomain(e.target.value.toLowerCase())} placeholder="mc.twojadomena.pl" />
+                      <p className="text-[10px] text-[var(--text-muted)] mt-1">Rekord DNS A (szara chmurka, bez proxy) zostanie utworzony automatycznie w Cloudflare</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Port ({installTarget.protocol.toUpperCase()})</label>
+                        <input type="number" className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all" value={formPort} onChange={e => setFormPort(e.target.value)} />
+                        <p className="text-[10px] text-[var(--text-muted)] mt-1">Port zostanie automatycznie otwarty w firewall</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Max graczy</label>
+                        <input type="number" className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all" value={formMaxPlayers} onChange={e => setFormMaxPlayers(e.target.value)} placeholder="32" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Hasło serwera (opcjonalne)</label>
+                      <input type="password" className="w-full h-10 px-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all" value={formPassword} onChange={e => setFormPassword(e.target.value)} placeholder="Zostaw puste dla publicznego serwera" />
+                    </div>
                   </div>
-                ))}
-                <div ref={logEndRef} />
-              </div>
 
-              {/* Result banners */}
-              {installStatus === 'success' && (
-                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20">
-                  <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-green-400">Serwer zainstalowany pomyslnie!</p>
-                    <p className="text-xs text-green-400/70 mt-0.5">Mozesz teraz uruchomic serwer z zakladki &quot;Serwery&quot;.</p>
+                  <div className="p-4 rounded-xl gradient-subtle border border-[var(--primary)]/15 text-xs text-[var(--text-muted)] space-y-1">
+                    <p className="font-medium text-[var(--text-secondary)]">Co zostanie wykonane automatycznie:</p>
+                    <p>• Instalacja serwera <code className="text-[var(--primary)]">{installTarget.name}</code> via LinuxGSM</p>
+                    <p>• Otwarcie portu <code className="text-[var(--primary)]">{formPort || installTarget.defaultPort}</code> w firewall (UFW)</p>
+                    {formDomain && <p>• Rekord DNS A: <code className="text-[var(--primary)]">{formDomain}</code> → IP serwera (bez proxy)</p>}
+                    <p>• Adres: <code className="text-[var(--primary)]">{formDomain || '<IP>'}{':'}{formPort || installTarget.defaultPort}</code></p>
                   </div>
-                </div>
-              )}
-              {installStatus === 'failed' && (
-                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-red-400">Instalacja nie powiodla sie.</p>
-                    <p className="text-xs text-red-400/70 mt-0.5">Sprawdz logi powyzej, aby poznac przyczyne bledu.</p>
-                  </div>
-                </div>
-              )}
 
-              {/* Close button */}
-              {installStatus !== 'running' && (
-                <div className="flex justify-end pt-1">
-                  <Button onClick={handleCloseInstallModal}>
-                    Zamknij
-                  </Button>
-                </div>
+                  <div className="flex gap-3">
+                    <Button variant="secondary" className="flex-1" onClick={handleCloseInstallModal}>Anuluj</Button>
+                    <Button className="flex-1" onClick={handleStartInstall}>
+                      <Download className="w-4 h-4" /> Zainstaluj serwer
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                /* ── Progress terminal ────────────────────────────────── */
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${installStatus === 'running' ? 'bg-amber-400 animate-pulse' : installStatus === 'success' ? 'bg-green-400' : 'bg-red-400'}`} />
+                    <span className="text-sm font-medium text-[var(--text-secondary)]">
+                      {installStatus === 'running' ? installStep || 'Uruchamianie...' : installStatus === 'success' ? 'Instalacja zakonczona' : 'Instalacja nieudana'}
+                    </span>
+                    {installStatus === 'running' && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-auto" />}
+                  </div>
+
+                  <div className="h-80 overflow-y-auto rounded-xl p-4 font-mono text-xs leading-relaxed border border-white/[0.06]" style={{ backgroundColor: '#0a0a0f' }}>
+                    {installLog.map((line, i) => (
+                      <div key={i} className={`whitespace-pre-wrap break-all ${line.startsWith('\u2713') ? 'text-green-400' : line.startsWith('\u2717') ? 'text-red-400' : line.startsWith('>') ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{line}</div>
+                    ))}
+                    <div ref={logEndRef} />
+                  </div>
+
+                  {installStatus === 'success' && (
+                    <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                      <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-green-400">Serwer zainstalowany!</p>
+                        <p className="text-xs text-green-400/70 mt-0.5">Adres: <code>{formDomain || '<IP>'}{':'}{formPort || installTarget.defaultPort}</code></p>
+                      </div>
+                    </div>
+                  )}
+                  {installStatus === 'failed' && (
+                    <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                      <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm font-medium text-red-400">Instalacja nie powiodla sie.</p>
+                    </div>
+                  )}
+                  {installStatus !== 'running' && (
+                    <div className="flex justify-end pt-1"><Button onClick={handleCloseInstallModal}>Zamknij</Button></div>
+                  )}
+                </>
               )}
             </div>
           </div>

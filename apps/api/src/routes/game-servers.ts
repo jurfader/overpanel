@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify'
-import { adminOnly } from '../middleware/auth.js'
+import { z } from 'zod'
+import { adminOnly, authMiddleware, getRequestUser } from '../middleware/auth.js'
+import { prisma } from '@overpanel/db'
 import {
   GAME_SERVER_TEMPLATES,
   installGameServer,
@@ -34,13 +36,13 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
     try {
       const installed = await getInstalledServers()
       const servers = await Promise.all(
-        installed.map(async (shortName) => {
-          const template = GAME_SERVER_TEMPLATES.find(t => t.shortName === shortName)
-          const status = await getGameServerStatus(shortName).catch(() => ({ running: false }))
+        installed.map(async (srv) => {
+          const template = GAME_SERVER_TEMPLATES.find(t => t.shortName === srv.shortName)
+          const status = await getGameServerStatus(srv.shortName).catch(() => ({ running: false }))
           return {
-            shortName,
-            name: template?.name ?? shortName,
+            ...srv,
             category: template?.category ?? 'Inne',
+            address: srv.domain ? `${srv.domain}:${srv.port}` : `<IP>:${srv.port}`,
             ...status,
           }
         })
@@ -64,31 +66,51 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
   })
 
   // POST /api/game-servers/install — install a game server
-  fastify.post('/install', { preHandler: [adminOnly] }, async (request, reply) => {
-    const { shortName } = request.body as { shortName: string }
+  const installSchema = z.object({
+    shortName: z.string().regex(/^[a-z0-9]+$/),
+    serverName: z.string().max(100).optional(),
+    domain: z.string().max(253).optional(),
+    port: z.number().int().min(1024).max(65535).optional(),
+    maxPlayers: z.number().int().min(1).max(1000).optional(),
+    password: z.string().max(100).optional(),
+  })
 
-    if (!shortName || !/^[a-z0-9]+$/.test(shortName)) {
-      return reply.code(400).send({ success: false, error: 'Nieprawidłowa nazwa serwera' })
+  fastify.post('/install', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const body = installSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' })
     }
+    const { shortName, serverName, domain, port, maxPlayers, password } = body.data
+    const caller = getRequestUser(request)
 
     const template = GAME_SERVER_TEMPLATES.find(t => t.shortName === shortName)
     if (!template) {
       return reply.code(404).send({ success: false, error: 'Szablon serwera nie znaleziony' })
     }
 
-    // Check if already installed
     const installed = await getInstalledServers()
-    if (installed.includes(shortName)) {
+    if (installed.some(s => s.shortName === shortName)) {
       return reply.code(409).send({ success: false, error: 'Serwer już zainstalowany' })
     }
 
-    // Start async install
+    // Get Cloudflare token for DNS
+    let cfToken: string | null = null
+    if (domain) {
+      const tokenRecord = await prisma.cloudflareToken.findFirst({
+        where: { userId: caller.id, isDefault: true },
+        select: { token: true },
+      })
+      cfToken = tokenRecord?.token ?? process.env.CLOUDFLARE_API_TOKEN ?? null
+    }
+
     reply.code(202).send({ success: true, data: { message: 'Instalacja rozpoczęta', shortName } })
 
     setImmediate(async () => {
       try {
-        await installGameServer(shortName)
-        console.log(`[GameServers] Installed ${shortName}`)
+        await installGameServer({
+          shortName, serverName, domain, port, maxPlayers, password,
+          cfToken: cfToken ?? undefined,
+        })
       } catch (err) {
         console.error(`[GameServers] Install failed for ${shortName}:`, err)
       }
