@@ -149,11 +149,21 @@ export default function GameServerManagePage() {
     `/api/game-servers/installed/${shortName}`
   )
 
-  // Poll server status every 5s to keep running/stopped badge up to date
+  // Silently poll running status every 5s — only updates badge, no loading flicker
+  const [liveRunning, setLiveRunning] = useState<boolean | null>(null)
+  const [livePid, setLivePid] = useState<number | undefined>(undefined)
   useEffect(() => {
-    const interval = setInterval(refetchServer, 5000)
+    const poll = async () => {
+      try {
+        const s = await api.get<{ running: boolean; pid?: number }>(`/api/game-servers/${shortName}/status`)
+        setLiveRunning(s.running)
+        setLivePid(s.pid)
+      } catch {}
+    }
+    poll()
+    const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
-  }, [refetchServer])
+  }, [shortName])
 
   const isMinecraft = MINECRAFT_SERVERS.includes(shortName)
 
@@ -448,9 +458,9 @@ export default function GameServerManagePage() {
                     <h2 className="text-lg font-semibold text-[var(--text-primary)] truncate">
                       {serverInfo.serverName || serverInfo.name}
                     </h2>
-                    <Badge variant={serverInfo.running ? 'success' : 'neutral'}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${serverInfo.running ? 'bg-green-400' : 'bg-gray-400'}`} />
-                      {serverInfo.running ? 'Uruchomiony' : 'Zatrzymany'}
+                    <Badge variant={(liveRunning ?? serverInfo.running) ? 'success' : 'neutral'}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${(liveRunning ?? serverInfo.running) ? 'bg-green-400' : 'bg-gray-400'}`} />
+                      {(liveRunning ?? serverInfo.running) ? 'Uruchomiony' : 'Zatrzymany'}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
@@ -462,14 +472,14 @@ export default function GameServerManagePage() {
                     >
                       {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
-                    {serverInfo.pid && <span>PID: {serverInfo.pid}</span>}
+                    {(livePid ?? serverInfo.pid) && <span>PID: {livePid ?? serverInfo.pid}</span>}
                   </div>
                 </div>
               </div>
 
               {/* Right: actions */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                {!serverInfo.running ? (
+                {!(liveRunning ?? serverInfo.running) ? (
                   <Button
                     size="sm"
                     onClick={() => handleAction('start')}
@@ -573,20 +583,20 @@ export default function GameServerManagePage() {
                     onKeyDown={e => e.key === 'Enter' && handleSendCommand()}
                     placeholder="Wpisz komende..."
                     className="w-full h-10 pl-8 pr-3 rounded-xl text-sm font-mono bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all"
-                    disabled={!serverInfo.running}
+                    disabled={!(liveRunning ?? serverInfo.running)}
                   />
                 </div>
                 <Button
                   size="sm"
                   onClick={handleSendCommand}
                   loading={sendingCommand}
-                  disabled={!serverInfo.running || !command.trim()}
+                  disabled={!(liveRunning ?? serverInfo.running) || !command.trim()}
                 >
                   <Send className="w-3.5 h-3.5" />
                   Wyslij
                 </Button>
               </div>
-              {!serverInfo.running && (
+              {!(liveRunning ?? serverInfo.running) && (
                 <p className="text-xs text-[var(--text-muted)] mt-2">Serwer musi byc uruchomiony, aby wysylac komendy.</p>
               )}
             </CardContent>

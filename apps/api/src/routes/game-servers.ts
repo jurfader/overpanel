@@ -295,6 +295,20 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // GET /api/game-servers/:shortName/status — lightweight running/pid check (for polling)
+  fastify.get('/:shortName/status', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { shortName } = request.params as { shortName: string }
+    if (!SHORT_NAME_RE.test(shortName)) {
+      return reply.code(400).send({ success: false, error: 'Nieprawidłowa nazwa serwera' })
+    }
+    try {
+      const status = await getGameServerStatus(shortName)
+      return reply.send({ success: true, data: status })
+    } catch {
+      return reply.send({ success: true, data: { running: false } })
+    }
+  })
+
   // GET /api/game-servers/installed/:shortName — single server info + status
   fastify.get('/installed/:shortName', { preHandler: [adminOnly] }, async (request, reply) => {
     const { shortName } = request.params as { shortName: string }
