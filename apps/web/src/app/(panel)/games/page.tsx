@@ -22,6 +22,7 @@ import {
   AlertCircle,
   X,
   Server,
+  Package,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -56,6 +57,15 @@ interface InstallStatus {
   log: string[]
   startedAt: string
   completedAt?: string
+}
+
+interface ModrinthModpack {
+  slug: string
+  title: string
+  description: string
+  icon_url?: string
+  downloads: number
+  categories: string[]
 }
 
 interface Toast {
@@ -113,6 +123,13 @@ export default function GameServersPage() {
   const [formVersion, setFormVersion] = useState('')
   const [formServerType, setFormServerType] = useState('vanilla')
   const [formRam, setFormRam] = useState('2048')
+
+  // Modpack picker state
+  const [formModpack, setFormModpack] = useState<ModrinthModpack | null>(null)
+  const [modpackQuery, setModpackQuery] = useState('')
+  const [modpackResults, setModpackResults] = useState<ModrinthModpack[]>([])
+  const [modpackSearching, setModpackSearching] = useState(false)
+  const modpackDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Confirm uninstall modal
   const [uninstallTarget, setUninstallTarget] = useState<InstalledServer | null>(null)
@@ -195,6 +212,9 @@ export default function GameServersPage() {
     setFormVersion('')
     setFormServerType('vanilla')
     setFormRam('2048')
+    setFormModpack(null)
+    setModpackQuery('')
+    setModpackResults([])
   }
 
   const handleStartInstall = async () => {
@@ -213,6 +233,7 @@ export default function GameServersPage() {
     if (formVersion) body.version = formVersion
     if (formServerType && formServerType !== 'vanilla') body.serverType = formServerType
     if (isMcServer && formRam) body.maxRam = parseInt(formRam, 10)
+    if (formModpack) body.modpackSlug = formModpack.slug
 
     try {
       await api.post('/api/game-servers/install', body)
@@ -249,6 +270,32 @@ export default function GameServersPage() {
     setInstallLog([])
     setInstallStatus('idle')
     setInstallStep('')
+  }
+
+  const handleModpackSearch = (query: string) => {
+    setModpackQuery(query)
+    if (modpackDebounceRef.current) clearTimeout(modpackDebounceRef.current)
+    if (!query.trim()) { setModpackResults([]); return }
+    modpackDebounceRef.current = setTimeout(async () => {
+      setModpackSearching(true)
+      try {
+        const facets = encodeURIComponent(JSON.stringify([['project_type:modpack'], ['server_side:required', 'server_side:optional']]))
+        const res = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&facets=${facets}&limit=6&index=relevance`)
+        const data = await res.json()
+        setModpackResults(data.hits ?? [])
+      } catch {}
+      setModpackSearching(false)
+    }, 400)
+  }
+
+  const handleSelectModpack = (mp: ModrinthModpack) => {
+    setFormModpack(mp)
+    setModpackResults([])
+    setModpackQuery('')
+    // Auto-set server type based on modpack loader categories
+    const cats = mp.categories ?? []
+    if (cats.includes('fabric') || cats.includes('quilt')) setFormServerType('fabric')
+    else if (cats.includes('forge') || cats.includes('neoforge')) setFormServerType('forge')
   }
 
   // ── Filters ─────────────────────────────────────────────────────────────────
@@ -597,6 +644,72 @@ export default function GameServersPage() {
                             <option value="12288">12 GB</option>
                             <option value="16384">16 GB</option>
                           </select>
+                        </div>
+
+                        {/* Modpack picker */}
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                            <Package className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+                            Paczka modów z Modrinth (opcjonalnie)
+                          </label>
+                          {formModpack ? (
+                            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 border border-[var(--primary)]/30">
+                              {formModpack.icon_url && (
+                                <img src={formModpack.icon_url} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-[var(--text-primary)] truncate">{formModpack.title}</p>
+                                <p className="text-[10px] text-[var(--text-muted)]">{formModpack.slug}</p>
+                              </div>
+                              <button
+                                onClick={() => setFormModpack(null)}
+                                className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                                <input
+                                  value={modpackQuery}
+                                  onChange={e => handleModpackSearch(e.target.value)}
+                                  placeholder="Szukaj modpacku (np. ATM10, RLCraft)..."
+                                  className="w-full h-10 pl-9 pr-3 rounded-xl text-sm bg-white/5 border border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]/40 transition-all"
+                                />
+                                {modpackSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[var(--text-muted)]" />}
+                              </div>
+                              {modpackResults.length > 0 && (
+                                <div className="absolute z-10 top-full mt-1 w-full rounded-xl border border-white/10 overflow-hidden shadow-xl" style={{ backgroundColor: '#111118' }}>
+                                  {modpackResults.map(mp => (
+                                    <button
+                                      key={mp.slug}
+                                      onClick={() => handleSelectModpack(mp)}
+                                      className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                    >
+                                      {mp.icon_url ? (
+                                        <img src={mp.icon_url} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                                      ) : (
+                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+                                          <Package className="w-4 h-4 text-[var(--text-muted)]" />
+                                        </div>
+                                      )}
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{mp.title}</p>
+                                        <p className="text-[10px] text-[var(--text-muted)] truncate">{mp.description}</p>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {formModpack && (
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                              Mody zostaną zainstalowane automatycznie po instalacji serwera. Typ serwera zostanie ustawiony zgodnie z wymaganiami paczki.
+                            </p>
+                          )}
                         </div>
                       </>
                     )}

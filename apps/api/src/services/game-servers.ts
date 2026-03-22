@@ -252,10 +252,12 @@ export interface GameInstallOptions {
   version?: string      // MC version e.g. "1.21.4"
   serverType?: string   // "vanilla"|"paper"|"purpur"|"fabric"|"forge"
   maxRam?: number       // MB, e.g. 2048
+  modpackSlug?: string  // Modrinth modpack slug to install after server setup
+  modpackVersionId?: string
 }
 
 export async function installGameServer(options: GameInstallOptions): Promise<void> {
-  const { shortName, serverName, domain, port, maxPlayers, password, cfToken, version, serverType, maxRam } = options
+  const { shortName, serverName, domain, port, maxPlayers, password, cfToken, version, serverType, maxRam, modpackSlug, modpackVersionId } = options
   const template = GAME_SERVER_TEMPLATES.find(t => t.shortName === shortName)
   const safe = shortName.replace(/[^a-z0-9]/g, '')
   const installDir = `${GAME_SERVERS_BASE}/${safe}`
@@ -473,7 +475,70 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
     await writeFile(`${installDir}/overpanel-config.json`, config, 'utf-8')
   })
 
-  // 9. Auto-start server
+  // 9. (optional) Install modpack mods — modloader is already set up in step 6b
+  if (modpackSlug) {
+    const serverFilesDir = `${installDir}/serverfiles`
+    let mrpackUrl = ''
+    let mrpackVersion = ''
+
+    await logStep(`Pobieranie informacji o modpacku "${modpackSlug}"`, async () => {
+      const url = modpackVersionId
+        ? `https://api.modrinth.com/v2/version/${modpackVersionId}`
+        : `https://api.modrinth.com/v2/project/${modpackSlug}/version?featured=true&limit=5`
+      const { stdout } = await runLong(`curl -s "${url}"`, 30_000)
+      const versions = modpackVersionId ? [JSON.parse(stdout)] : JSON.parse(stdout)
+      if (!versions?.length) throw new Error('Brak wersji modpacku na Modrinth')
+      const ver = versions[0]
+      const mrpackFile = ver.files?.find((f: any) => f.primary || f.filename?.endsWith('.mrpack'))
+      if (!mrpackFile) throw new Error('Brak pliku .mrpack w tej wersji')
+      mrpackUrl = mrpackFile.url
+      mrpackVersion = ver.version_number
+      log.push(`  Wersja modpacku: ${mrpackVersion}`)
+    })
+
+    const mrpackPath = `/tmp/${safe}-modpack-install-${Date.now()}.mrpack`
+
+    await logStep('Pobieranie paczki (.mrpack)', async () => {
+      await runLong(`curl -Lo "${mrpackPath}" "${mrpackUrl}"`, 600_000)
+    })
+
+    await logStep('Instalacja modów z paczki', async () => {
+      const { stdout } = await runLong(`unzip -p "${mrpackPath}" modrinth.index.json`, 15_000)
+      const indexData = JSON.parse(stdout)
+      const files: any[] = indexData.files ?? []
+      const serverFiles = files.filter((f: any) => !f.env || f.env.server !== 'unsupported')
+
+      await run(`su - ${GSM_USER} -c "mkdir -p ${serverFilesDir}/mods"`)
+
+      let downloaded = 0
+      for (const f of serverFiles) {
+        const fname = f.path.split('/').pop()
+        try {
+          await runLong(`su - ${GSM_USER} -c "curl -sLo '${serverFilesDir}/${f.path}' '${f.downloads[0]}'"`, 60_000)
+          downloaded++
+        } catch {
+          log.push(`  Pominięto: ${fname}`)
+        }
+      }
+      log.push(`  Pobrano ${downloaded}/${serverFiles.length} modów`)
+    })
+
+    await logStep('Rozpakowywanie plików konfiguracyjnych (overrides)', async () => {
+      const { stdout: listing } = await runLong(`unzip -l "${mrpackPath}" | grep 'overrides/' || true`, 10_000)
+      if (listing.trim()) {
+        await runLong(
+          `cd "${serverFilesDir}" && unzip -o "${mrpackPath}" 'overrides/*' && ` +
+          `rsync -a overrides/ . && rm -rf overrides/ || true`,
+          60_000
+        )
+        await run(`chown -R ${GSM_USER}:${GSM_USER} "${serverFilesDir}"`)
+      }
+    })
+
+    await run(`rm -f "${mrpackPath}"`)
+  }
+
+  // 10. Auto-start server
   await logStep('Uruchamianie serwera', async () => {
     await runLong(`su - ${GSM_USER} -c "cd ${installDir} && ./${safe} start"`, 120_000)
   })
