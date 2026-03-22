@@ -210,6 +210,7 @@ const SECTION_LABELS: Record<string, string> = {
   mail: 'Poczta e-mail',
   webmail: 'Webmail',
   docker: 'Docker',
+  games: 'Serwery gier',
   files: 'Menedżer plików',
   ftp: 'FTP / SFTP',
   cron: 'Cron Jobs',
