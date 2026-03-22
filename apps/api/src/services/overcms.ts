@@ -85,7 +85,7 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
 }> {
   const { domain, adminEmail, adminPassword, licenseKey } = options
   const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
-  const licenseServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://localhost:3002'
+  const licenseServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://51.38.137.199:3002'
   const installDir = `${OVERCMS_BASE_DIR}/${safeDomain}`
   const portBase = await getNextPortBase()
 
