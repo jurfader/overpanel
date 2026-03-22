@@ -346,6 +346,9 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
       const serverFilesDir = `${installDir}/serverfiles`
       const mcVersion = version || '1.21.4'
 
+      // Ensure serverfiles dir exists (LinuxGSM may not create it until first run)
+      await run(`mkdir -p "${serverFilesDir}" && chown ${GSM_USER}:${GSM_USER} "${serverFilesDir}"`)
+
       if (serverType === 'paper') {
         const { stdout: buildsJson } = await runLong(
           `curl -s "https://api.papermc.io/v2/projects/paper/versions/${mcVersion}/builds"`,
@@ -376,10 +379,12 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
         const installers = JSON.parse(installerJson)
         const installerUrl = installers[0].url
         await runLong(`curl -Lo /tmp/fabric-installer.jar "${installerUrl}"`, 60_000)
+        // Run from /tmp — Fabric installer uses -dir to determine output location
         await runLong(
-          `cd "${serverFilesDir}" && java -jar /tmp/fabric-installer.jar server -mcversion ${mcVersion} -downloadMinecraft -dir "${serverFilesDir}"`,
+          `java -jar /tmp/fabric-installer.jar server -mcversion ${mcVersion} -downloadMinecraft -dir "${serverFilesDir}"`,
           300_000
         )
+        await run(`chown -R ${GSM_USER}:${GSM_USER} "${serverFilesDir}"`)
         const lgsmCfgDir = `${installDir}/lgsm/config-lgsm/${safe}`
         await run(`mkdir -p "${lgsmCfgDir}"`)
         await writeFile(`${lgsmCfgDir}/${safe}.cfg`, `# Fabric server\nexecutable="fabric-server-launch.jar"\n`, 'utf-8')
@@ -401,11 +406,12 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
           `curl -Lo "/tmp/${installerJar}" "https://maven.minecraftforge.net/net/minecraftforge/forge/${mcVersion}-${forgeVer}/${installerJar}"`,
           120_000
         )
-        // --installServer is fully non-interactive
+        // --installServer installs into current dir; cd into serverfiles first
         await runLong(
           `cd "${serverFilesDir}" && java -jar "/tmp/${installerJar}" --installServer`,
           600_000
         )
+        await run(`chown -R ${GSM_USER}:${GSM_USER} "${serverFilesDir}"`)
         await run(`rm -f "/tmp/${installerJar}"`)
 
         // Configure LinuxGSM to use run.sh (1.17+) or the forge jar (older)
