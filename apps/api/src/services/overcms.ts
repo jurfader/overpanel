@@ -118,7 +118,7 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
       // Show meaningful error detail in log
       const msg = err.message || String(err)
       const lines = msg.split('\n').filter((l: string) => l.trim())
-      for (const line of lines.slice(0, 10)) {
+      for (const line of lines.slice(-15)) {
         log.push(`  ${line}`)
       }
       log.push(`✗ ${step}`)
@@ -261,9 +261,14 @@ COMPEOF`)
     }
   })
 
-  // 7. Run database migration from host (source schema .ts files not in prod container)
+  // 7. Install host-side dev dependencies (needed for drizzle/tsx migration)
+  await logStep('Instalacja zależności (migracja)', async () => {
+    await runLong(`cd ${installDir}/app && NODE_ENV=development pnpm install`, 300_000)
+  })
+
+  // 7b. Run database migration across all workspaces
   await logStep('Migracja bazy danych', async () => {
-    await runLong(`cd ${installDir}/app && NODE_ENV=development pnpm install 2>&1 && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm run db:push`, 300_000)
+    await runLong(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPassword}@localhost:${pgPort}/overcms pnpm -r --if-present run db:push`, 120_000)
   })
 
   // 8. Seed admin user from host (source .ts files not in prod container)
