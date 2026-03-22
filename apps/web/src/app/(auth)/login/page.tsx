@@ -46,11 +46,7 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-sm px-6">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl gradient-brand flex items-center justify-center mx-auto mb-4 glow-brand">
-            <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="currentColor">
-              <path d="M12 2L8.5 8.5H2L7 13l-2 7 7-4.5L19 20l-2-7 5-4.5h-6.5L12 2z" />
-            </svg>
-          </div>
+          <img src="/logo.png" alt="OVERPANEL" className="w-16 h-16 rounded-2xl mx-auto mb-4" />
           <h1 className="text-2xl font-bold gradient-brand-text">OVERPANEL</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">VPS Control Panel</p>
         </div>
