@@ -260,8 +260,12 @@ COMPEOF`)
       await run(`sed -i '/COPY apps\\/portal/a COPY tsconfig.base.json ./' ${portalDockerfile}`)
       // Also copy shared packages if referenced
       await run(`sed -i '/COPY tsconfig.base.json/a COPY packages ./packages' ${portalDockerfile}`)
-      // Add ARG/ENV for NEXT_PUBLIC_ vars so they're available at build time
-      await run(`sed -i '/RUN pnpm --filter @overcms\\/portal build/i ARG NEXT_PUBLIC_LICENSE_SERVER_URL\\nENV NEXT_PUBLIC_LICENSE_SERVER_URL=$NEXT_PUBLIC_LICENSE_SERVER_URL\\nARG NEXT_PUBLIC_API_URL\\nENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL\\nARG NEXT_PUBLIC_SITE_URL\\nENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL' ${portalDockerfile}`)
+      // Create .env.local for portal — Next.js reads it at build time automatically
+      await run(`cat > ${installDir}/app/apps/portal/.env.local << 'PORTALENV'
+NEXT_PUBLIC_LICENSE_SERVER_URL=${licenseServerUrl}
+NEXT_PUBLIC_API_URL=https://${domain}
+NEXT_PUBLIC_SITE_URL=https://${domain}
+PORTALENV`)
     }
     // Fix TS unused-variable errors in portal source
     await run(`sed -i 's/const canceled = false/const _canceled = false/' ${installDir}/app/apps/portal/src/app/page.tsx 2>/dev/null || true`)
