@@ -130,7 +130,6 @@ export async function sitesRoutes(fastify: FastifyInstance) {
               adminEmail: body.data.adminEmail || caller.email || 'admin@' + domain,
               adminPassword: body.data.adminPassword || 'Admin123!',
               licenseKey: body.data.licenseKey,
-              ghToken: process.env.GH_TOKEN,
             })
             await createNginxOverCmsProxy({ domain, apiPort: result.apiPort, adminPort: result.adminPort })
             await reloadNginx()
@@ -276,13 +275,9 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       const safeDomain = site.domain.replace(/[^a-z0-9.-]/g, '')
       const installDir = `/opt/overcms-sites/${safeDomain}`
       try {
-        // Build authenticated fetch URL; x-access-token:<PAT> works without TTY prompt
-        const { OVERCMS_GH_TOKEN } = await import('../services/overcms.js')
-        const remoteUrl = `https://x-access-token:${OVERCMS_GH_TOKEN}@github.com/jurfader/over-cms.git`
-
-        await execAsync(`git -C ${installDir}/app fetch ${remoteUrl} main`, {
+        await execAsync(`git -C ${installDir}/app fetch https://github.com/jurfader/over-cms.git main`, {
           timeout: 30_000,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' },
+          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
         })
         const { stdout } = await execAsync(`git -C ${installDir}/app log HEAD..FETCH_HEAD --oneline`)
         const commits = stdout.trim().split('\n').filter(Boolean)
@@ -340,10 +335,10 @@ export async function sitesRoutes(fastify: FastifyInstance) {
 
       setImmediate(async () => {
         try {
-          const { OVERCMS_GH_TOKEN } = await import('../services/overcms.js')
-          const pullUrl = `https://x-access-token:${OVERCMS_GH_TOKEN}@github.com/jurfader/over-cms.git`
-          const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' }
-          await execAsync(`git -C ${installDir}/app fetch ${pullUrl} main && git -C ${installDir}/app reset --hard FETCH_HEAD`, { timeout: 60_000, env: gitEnv })
+          await execAsync(
+            `git -C ${installDir}/app fetch https://github.com/jurfader/over-cms.git main && git -C ${installDir}/app reset --hard FETCH_HEAD`,
+            { timeout: 60_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
+          )
           await execAsync(`${dc} up -d --build`, { timeout: 600_000 })
           // Re-run migration from host
           const envRaw = await (await import('fs/promises')).readFile(`${installDir}/app/.env`, 'utf-8')
