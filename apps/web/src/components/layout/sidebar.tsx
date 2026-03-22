@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Key,
   Disc3,
+  Gamepad2,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'next/navigation'
@@ -50,6 +51,7 @@ const navItems: NavGroup[] = [
       { href: '/mail', label: 'Poczta e-mail', icon: Mail, section: 'mail' },
       { href: '/webmail', label: 'Webmail', icon: Inbox, section: 'webmail' },
       { href: '/docker', label: 'Docker', icon: Container, section: 'docker' },
+      { href: '/games', label: 'Serwery gier', icon: Gamepad2, adminOnly: true },
       { href: '/files', label: 'Menedżer plików', icon: FolderOpen, needsSite: true, section: 'files' },
       { href: '/ftp', label: 'FTP / SFTP', icon: UserCog, needsSite: true, section: 'ftp' },
       { href: '/cron', label: 'Cron Jobs', icon: Clock, section: 'cron' },

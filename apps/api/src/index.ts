@@ -30,6 +30,7 @@ import { mailRoutes } from './routes/mail.js'
 import { webmailRoutes } from './routes/webmail.js'
 import { licensesRoutes } from './routes/licenses.js'
 import { disksRoutes } from './routes/disks.js'
+import { gameServersRoutes } from './routes/game-servers.js'
 import { startStatsEmitter } from './system/stats-emitter.js'
 import { startBackupScheduler } from './services/backup-scheduler.js'
 import { authMiddleware } from './middleware/auth.js'
@@ -100,6 +101,7 @@ async function bootstrap() {
   await fastify.register(webmailRoutes, { prefix: '/api/webmail' })
   await fastify.register(licensesRoutes, { prefix: '/api/licenses' })
   await fastify.register(disksRoutes, { prefix: '/api/disks' })
+  await fastify.register(gameServersRoutes, { prefix: '/api/game-servers' })
 
   // ── Health check ──────────────────────────────────────────────────────────
   fastify.get('/health', async () => ({ status: 'ok', ts: new Date().toISOString() }))

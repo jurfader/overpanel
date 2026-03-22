@@ -16,7 +16,7 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'   # No Color
 
-TOTAL_STEPS=15
+TOTAL_STEPS=16
 CURRENT_STEP=0
 
 # ------------------------------------------------------------------------------
@@ -660,6 +660,42 @@ log_ok "Docker ${DOCKER_VER} zainstalowany i uruchomiony"
 # Create Docker data directory
 mkdir -p /opt/docker-data
 log_ok "Katalog danych Docker: /opt/docker-data"
+
+# ==============================================================================
+# STEP 11c: LinuxGSM dependencies (Game Servers)
+# ==============================================================================
+log_step "Przygotowanie LinuxGSM (serwery gier)"
+
+log_info "Instalowanie zależności LinuxGSM..."
+dpkg --add-architecture i386 2>/dev/null || true
+apt-get update -qq > /dev/null 2>&1
+apt-get install -y -qq lib32gcc-s1 lib32stdc++6 2>/dev/null || apt-get install -y -qq lib32gcc1 2>/dev/null || true
+
+# SteamCMD (best-effort — not all servers need it)
+log_info "Instalowanie SteamCMD..."
+echo steam steam/question select "I AGREE" | debconf-set-selections 2>/dev/null || true
+echo steam steam/license note '' | debconf-set-selections 2>/dev/null || true
+apt-get install -y -qq steamcmd 2>/dev/null || log_warn "SteamCMD niedostępny — instalacja ręczna może być wymagana"
+
+# Create gsm user
+if id gsm &>/dev/null; then
+    log_warn "Użytkownik gsm już istnieje"
+else
+    useradd -m -s /bin/bash gsm
+    log_ok "Użytkownik systemowy gsm utworzony"
+fi
+
+# Create game servers base directory
+mkdir -p /opt/game-servers
+chown gsm:gsm /opt/game-servers
+
+# Download linuxgsm.sh to base directory
+log_info "Pobieranie LinuxGSM..."
+su - gsm -c "cd /opt/game-servers && curl -Lo linuxgsm.sh https://linuxgsm.sh && chmod +x linuxgsm.sh" 2>/dev/null \
+    && log_ok "LinuxGSM pobrany do /opt/game-servers/linuxgsm.sh" \
+    || log_warn "Nie udało się pobrać LinuxGSM — serwery gier będą wymagać ręcznej konfiguracji"
+
+log_ok "LinuxGSM przygotowany"
 
 # ==============================================================================
 # STEP 12: Clone and build OVERPANEL
