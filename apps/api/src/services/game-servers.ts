@@ -544,7 +544,12 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
     await run(`rm -f "${mrpackPath}"`)
   }
 
-  // 10. Auto-start server
+  // 10. Fix ownership — all files in installDir must belong to GSM_USER
+  await logStep('Ustawianie uprawnień plików', async () => {
+    await run(`chown -R ${GSM_USER}:${GSM_USER} "${installDir}"`)
+  })
+
+  // 11. Auto-start server
   await logStep('Uruchamianie serwera', async () => {
     await runLong(`su - ${GSM_USER} -c "cd ${installDir} && ./${safe} start"`, 120_000)
   })
