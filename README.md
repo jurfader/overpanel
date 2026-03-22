@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/version-1.0.0-E91E8C?style=for-the-badge" alt="Version 1.0.0" />
+<img src="https://img.shields.io/badge/version-1.0.1-E91E8C?style=for-the-badge" alt="Version 1.0.1" />
 <img src="https://img.shields.io/badge/ubuntu-22.04%20%7C%2024.04-9B26D9?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
 <img src="https://img.shields.io/badge/license-proprietary-0A0A0F?style=for-the-badge" alt="License" />
 
@@ -176,6 +176,30 @@ Ciemny motyw z glassmorphism i neonowymi akcentami:
 - Glassmorphism cards z `backdrop-blur` i `border-white/10`
 - Framer Motion animacje (page transitions, hover effects)
 - Responsywny layout (mobile-friendly)
+
+---
+
+## Screenshots
+
+<!-- Wrzuć screeny do folderu docs/screenshots/ i odkomentuj poniższe linie -->
+
+<!--
+<div align="center">
+
+| Dashboard | Strony |
+|-----------|--------|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Strony](docs/screenshots/sites.png) |
+
+| Bazy danych | Terminal |
+|-------------|----------|
+| ![Bazy](docs/screenshots/databases.png) | ![Terminal](docs/screenshots/terminal.png) |
+
+| Serwery gier | Poczta |
+|--------------|--------|
+| ![Games](docs/screenshots/games.png) | ![Mail](docs/screenshots/mail.png) |
+
+</div>
+-->
 
 ---
 

@@ -14,3 +14,7 @@ prisma/dev.db-journal
 # Panel database
 panel.db
 panel.db-journal
+
+# Local dev / AI tools
+.claude/
+PLAN.md
