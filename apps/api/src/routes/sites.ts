@@ -241,6 +241,22 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     return reply.send({ success: true, data })
   })
 
+  // GET /api/sites/update-status/:domain — live update progress
+  fastify.get('/update-status/:domain', { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { domain } = request.params as { domain: string }
+    const safe = domain.replace(/[^a-z0-9.-]/g, '')
+    const statusFile = `/tmp/overcms-update-${safe}.json`
+    const { existsSync } = await import('fs')
+    const { readFile } = await import('fs/promises')
+    if (!existsSync(statusFile)) return reply.send({ success: true, data: null })
+    try {
+      const data = JSON.parse(await readFile(statusFile, 'utf-8'))
+      return reply.send({ success: true, data })
+    } catch {
+      return reply.send({ success: true, data: null })
+    }
+  })
+
   // GET /api/sites/:id/check-update — sprawdź dostępność aktualizacji CMS
   fastify.get('/:id/check-update', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -330,23 +346,58 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       const safeDomain = site.domain.replace(/[^a-z0-9.-]/g, '')
       const installDir = `/opt/overcms-sites/${safeDomain}`
       const dc = `cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml`
+      const { writeFile } = await import('fs/promises')
+      const statusFile = `/tmp/overcms-update-${safeDomain}.json`
+      const startedAt = new Date().toISOString()
+      const log: string[] = []
+
+      const writeStatus = async (status: 'running' | 'success' | 'failed', step: string) => {
+        await writeFile(statusFile, JSON.stringify({ status, step, log, startedAt, completedAt: status !== 'running' ? new Date().toISOString() : undefined }, null, 2))
+      }
+
+      const runStep = async (label: string, fn: () => Promise<void>) => {
+        log.push(`> ${label}`)
+        await writeStatus('running', label)
+        try {
+          await fn()
+          log.push(`✓ ${label}`)
+        } catch (err: any) {
+          log.push(`✗ ${label}: ${err.message?.split('\n')[0] ?? String(err)}`)
+          await writeStatus('failed', label)
+          throw err
+        }
+      }
 
       reply.code(202).send({ success: true, data: { message: 'Aktualizacja OverCMS w toku...' } })
 
       setImmediate(async () => {
         try {
-          await execAsync(
-            `git -C ${installDir}/app fetch https://github.com/jurfader/over-cms.git main && git -C ${installDir}/app reset --hard FETCH_HEAD`,
-            { timeout: 60_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
-          )
-          await execAsync(`${dc} up -d --build`, { timeout: 600_000 })
-          // Re-run migration from host
-          const envRaw = await (await import('fs/promises')).readFile(`${installDir}/app/.env`, 'utf-8')
-          const pgPassMatch = envRaw.match(/POSTGRES_PASSWORD=(.+)/)
-          const pgPass = pgPassMatch?.[1]?.trim() ?? ''
-          const portsRaw = await (await import('fs/promises')).readFile(`${installDir}/ports.json`, 'utf-8')
-          const ports = JSON.parse(portsRaw)
-          await execAsync(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPass}@localhost:${ports.pgPort}/overcms pnpm run db:push`, { timeout: 120_000 })
+          await runStep('Pobieranie nowej wersji', async () => {
+            const { stdout, stderr } = await execAsync(
+              `git -C ${installDir}/app fetch https://github.com/jurfader/over-cms.git main && git -C ${installDir}/app reset --hard FETCH_HEAD`,
+              { timeout: 60_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
+            )
+            if (stdout.trim()) log.push(stdout.trim())
+            if (stderr.trim()) log.push(stderr.trim())
+          })
+
+          await runStep('Przebudowanie obrazów Docker', async () => {
+            const { stdout } = await execAsync(`${dc} up -d --build 2>&1`, { timeout: 600_000 })
+            if (stdout.trim()) stdout.trim().split('\n').slice(-10).forEach(l => log.push(l))
+          })
+
+          await runStep('Migracja bazy danych', async () => {
+            const { readFile } = await import('fs/promises')
+            const envRaw = await readFile(`${installDir}/app/.env`, 'utf-8')
+            const pgPassMatch = envRaw.match(/POSTGRES_PASSWORD=(.+)/)
+            const pgPass = pgPassMatch?.[1]?.trim() ?? ''
+            const portsRaw = await readFile(`${installDir}/ports.json`, 'utf-8')
+            const ports = JSON.parse(portsRaw)
+            await execAsync(`cd ${installDir}/app && DATABASE_URL=postgresql://overcms:${pgPass}@localhost:${ports.pgPort}/overcms pnpm run db:push 2>&1`, { timeout: 120_000 })
+          })
+
+          log.push('✓ Aktualizacja zakończona pomyślnie!')
+          await writeStatus('success', 'done')
           console.log(`[OverCMS] Updated ${safeDomain}`)
         } catch (err: any) {
           console.error(`[OverCMS] Update failed for ${safeDomain}:`, err.message)

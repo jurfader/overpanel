@@ -8,7 +8,7 @@ import type { Site } from '@overpanel/shared'
 import {
   Globe, Shield, ShieldOff, ExternalLink,
   Trash2, MoreHorizontal, RefreshCw, Power, Settings,
-  ArrowUpCircle, Loader2, CloudCog,
+  ArrowUpCircle, Loader2, CloudCog, CheckCircle2, AlertCircle, X,
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -140,14 +140,26 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [updateLog, setUpdateLog] = useState<string[]>([])
+  const [updateStatus, setUpdateStatus] = useState<'running' | 'success' | 'failed' | null>(null)
+  const [updateStep, setUpdateStep] = useState('')
+  const updatePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const logEndRef = useRef<HTMLDivElement>(null)
 
   const hasCms = site.hasWordpress || site.siteType === 'overcms'
 
-  // Check for updates on mount for CMS sites
   useEffect(() => {
     if (!hasCms) return
     checkUpdate()
   }, [site.id])
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [updateLog])
+
+  useEffect(() => {
+    return () => { if (updatePollRef.current) clearInterval(updatePollRef.current) }
+  }, [])
 
   const checkUpdate = async () => {
     setCheckingUpdate(true)
@@ -163,17 +175,35 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
     setUpdating(true)
     try {
       await api.post(`/api/sites/${site.id}/update-cms`)
-      // For WP it's synchronous, for OverCMS it's async
       if (site.hasWordpress) {
         onRefetch()
+        setUpdating(false)
       } else {
-        alert('Aktualizacja OverCMS uruchomiona w tle. Docker rebuild może potrwać kilka minut.')
+        // OverCMS — show live log modal
+        setUpdateLog([])
+        setUpdateStatus('running')
+        setUpdateStep('Uruchamianie...')
+        updatePollRef.current = setInterval(async () => {
+          try {
+            const res = await api.get<{ status: string; step: string; log: string[] } | null>(`/api/sites/update-status/${site.domain}`)
+            if (res) {
+              setUpdateLog(res.log)
+              setUpdateStep(res.step)
+              if (res.status === 'success' || res.status === 'failed') {
+                setUpdateStatus(res.status as 'success' | 'failed')
+                clearInterval(updatePollRef.current!)
+                updatePollRef.current = null
+                setUpdating(false)
+                if (res.status === 'success') setUpdateInfo(u => u ? { ...u, hasUpdate: false } : u)
+              }
+            }
+          } catch {}
+        }, 1500)
       }
-      setUpdateInfo(u => u ? { ...u, hasUpdate: false } : u)
     } catch (err: any) {
       alert(err.message || 'Błąd podczas aktualizacji')
+      setUpdating(false)
     }
-    setUpdating(false)
   }
 
   const handleDelete = async () => {
@@ -320,6 +350,61 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
           siteDomain={site.domain}
           onClose={() => setPhpModal(false)}
         />
+      )}
+
+      {updateStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative z-10 rounded-2xl p-6 w-full max-w-2xl border border-white/10 space-y-4 bg-[#0A0A0F] shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">Aktualizacja OverCMS — {site.domain}</h2>
+              {updateStatus !== 'running' && (
+                <button onClick={() => setUpdateStatus(null)} className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-muted)]">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${updateStatus === 'running' ? 'bg-amber-400 animate-pulse' : updateStatus === 'success' ? 'bg-green-400' : 'bg-red-400'}`} />
+              <span className="text-sm text-[var(--text-secondary)]">
+                {updateStatus === 'running' ? updateStep || 'Uruchamianie...' : updateStatus === 'success' ? 'Aktualizacja zakończona' : 'Aktualizacja nieudana'}
+              </span>
+              {updateStatus === 'running' && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-auto" />}
+            </div>
+
+            <div className="h-72 overflow-y-auto rounded-xl p-4 font-mono text-xs leading-relaxed border border-white/[0.06]" style={{ backgroundColor: '#0a0a0f' }}>
+              {updateLog.map((line, i) => (
+                <div key={i} className={`whitespace-pre-wrap break-all ${
+                  line.startsWith('✓') ? 'text-green-400' :
+                  line.startsWith('✗') ? 'text-red-400' :
+                  line.startsWith('>') ? 'text-[var(--primary)]' :
+                  'text-gray-300'
+                }`}>{line}</div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+
+            {updateStatus === 'success' && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+                <p className="text-sm text-green-400">OverCMS zaktualizowany pomyślnie.</p>
+              </div>
+            )}
+            {updateStatus === 'failed' && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                <p className="text-sm text-red-400">Aktualizacja nieudana. Sprawdź logi powyżej.</p>
+              </div>
+            )}
+
+            {updateStatus !== 'running' && (
+              <div className="flex justify-end">
+                <Button onClick={() => setUpdateStatus(null)}>Zamknij</Button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </>
   )
