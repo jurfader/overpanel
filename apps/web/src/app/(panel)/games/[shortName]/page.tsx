@@ -151,6 +151,14 @@ export default function GameServerManagePage() {
   const [popularLoading, setPopularLoading] = useState(false)
   const [modsSubTab, setModsSubTab] = useState<'mods' | 'modpacks'>('mods')
 
+  // Modpack install state
+  const [modpackInstalling, setModpackInstalling] = useState<string | null>(null) // slug
+  const [modpackLog, setModpackLog] = useState<string[]>([])
+  const [modpackStatus, setModpackStatus] = useState<'idle' | 'running' | 'success' | 'failed'>('idle')
+  const [modpackStep, setModpackStep] = useState('')
+  const modpackPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const modpackLogEndRef = useRef<HTMLDivElement>(null)
+
   // Files state
   const [filesCurrentPath, setFilesCurrentPath] = useState(`/opt/game-servers/${shortName}/serverfiles`)
   const [fileEntries, setFileEntries] = useState<FileEntry[]>([])
@@ -402,6 +410,44 @@ export default function GameServerManagePage() {
       setDeletingMod(null)
     }
   }
+
+  const handleInstallModpack = async (mod: ModrinthResult) => {
+    setModpackInstalling(mod.slug)
+    setModpackStatus('running')
+    setModpackLog(['Rozpoczynanie instalacji modpacku...'])
+    setModpackStep('')
+    try {
+      await api.post(`/api/game-servers/${shortName}/modpacks/install`, { modpackSlug: mod.slug })
+    } catch (err: any) {
+      setModpackLog([`Błąd: ${err.message ?? 'Nie można uruchomić instalacji'}`])
+      setModpackStatus('failed')
+      return
+    }
+    modpackPollRef.current = setInterval(async () => {
+      try {
+        const res = await api.get<{ status: string; step: string; log: string[] } | null>(
+          `/api/game-servers/${shortName}/modpacks/status`
+        )
+        if (res) {
+          setModpackLog(res.log)
+          setModpackStep(res.step)
+          if (res.status === 'success' || res.status === 'failed') {
+            setModpackStatus(res.status as 'success' | 'failed')
+            if (modpackPollRef.current) { clearInterval(modpackPollRef.current); modpackPollRef.current = null }
+            if (res.status === 'success') fetchMods()
+          }
+        }
+      } catch {}
+    }, 2000)
+  }
+
+  useEffect(() => {
+    modpackLogEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [modpackLog])
+
+  useEffect(() => {
+    return () => { if (modpackPollRef.current) clearInterval(modpackPollRef.current) }
+  }, [])
 
   // ── Files ────────────────────────────────────────────────────────────────────
 
@@ -990,15 +1036,27 @@ export default function GameServerManagePage() {
                                     <span className="text-[10px] text-[var(--text-muted)]">
                                       {mod.downloads.toLocaleString()} pobrań
                                     </span>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleInstallMod(mod)}
-                                      loading={installingMod === mod.slug}
-                                    >
-                                      <Download className="w-3 h-3" />
-                                      Zainstaluj
-                                    </Button>
+                                    {modsSubTab === 'modpacks' ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleInstallModpack(mod)}
+                                        loading={modpackInstalling === mod.slug && modpackStatus === 'running'}
+                                      >
+                                        <Download className="w-3 h-3" />
+                                        Zainstaluj
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleInstallMod(mod)}
+                                        loading={installingMod === mod.slug}
+                                      >
+                                        <Download className="w-3 h-3" />
+                                        Zainstaluj
+                                      </Button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1085,6 +1143,58 @@ export default function GameServerManagePage() {
           </Card>
         )}
       </main>
+
+      {/* ── Modpack install progress modal ───────────────────────────────────── */}
+      {modpackInstalling && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={modpackStatus !== 'running' ? () => setModpackInstalling(null) : undefined} />
+          <div className="relative glass-card rounded-2xl border border-white/10 shadow-2xl w-full max-w-[600px] flex flex-col" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+            <div className="flex-shrink-0 flex items-center justify-between px-6 py-5 border-b border-white/[0.06]">
+              <div>
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">Instalacja modpacku</h2>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5 font-mono">{modpackInstalling}</p>
+              </div>
+              {modpackStatus !== 'running' && (
+                <button onClick={() => setModpackInstalling(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-2.5 h-2.5 rounded-full ${modpackStatus === 'running' ? 'bg-amber-400 animate-pulse' : modpackStatus === 'success' ? 'bg-green-400' : 'bg-red-400'}`} />
+                <span className="text-sm font-medium text-[var(--text-secondary)]">
+                  {modpackStatus === 'running' ? modpackStep || 'Uruchamianie...' : modpackStatus === 'success' ? 'Instalacja zakończona' : 'Instalacja nieudana'}
+                </span>
+                {modpackStatus === 'running' && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-auto" />}
+              </div>
+              <div className="h-72 overflow-y-auto rounded-xl p-4 font-mono text-xs leading-relaxed border border-white/[0.06]" style={{ backgroundColor: '#0a0a0f' }}>
+                {modpackLog.map((line, i) => (
+                  <div key={i} className={`whitespace-pre-wrap break-all ${line.startsWith('✓') ? 'text-green-400' : line.startsWith('✗') ? 'text-red-400' : line.startsWith('>') ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{line}</div>
+                ))}
+                <div ref={modpackLogEndRef} />
+              </div>
+              {modpackStatus === 'success' && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium text-green-400">Modpack zainstalowany! Zrestartuj serwer, aby zastosować zmiany.</p>
+                </div>
+              )}
+              {modpackStatus === 'failed' && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium text-red-400">Instalacja nie powiodła się. Sprawdź logi powyżej.</p>
+                </div>
+              )}
+              {modpackStatus !== 'running' && (
+                <div className="flex justify-end">
+                  <Button onClick={() => setModpackInstalling(null)}>Zamknij</Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toasts ───────────────────────────────────────────────────────────── */}
       {toasts.length > 0 && (

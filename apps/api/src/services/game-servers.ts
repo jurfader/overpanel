@@ -375,7 +375,43 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
         await run(`chown -R ${GSM_USER}:${GSM_USER} "${lgsmCfgDir}"`)
 
       } else if (serverType === 'forge') {
-        log.push('  ℹ Forge wymaga ręcznej instalacji. Zainstalowano Vanilla — pobierz Forge installer i uruchom ręcznie.')
+        // Get latest Forge version for this MC release
+        const { stdout: promoJson } = await runLong(
+          `curl -s "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json"`,
+          30_000
+        )
+        const promos = JSON.parse(promoJson)
+        const forgeVer: string =
+          promos.promos[`${mcVersion}-recommended`] ?? promos.promos[`${mcVersion}-latest`]
+        if (!forgeVer) throw new Error(`Brak Forge dla Minecraft ${mcVersion}`)
+
+        const installerJar = `forge-${mcVersion}-${forgeVer}-installer.jar`
+        await runLong(
+          `curl -Lo "/tmp/${installerJar}" "https://maven.minecraftforge.net/net/minecraftforge/forge/${mcVersion}-${forgeVer}/${installerJar}"`,
+          120_000
+        )
+        // --installServer is fully non-interactive
+        await runLong(
+          `cd "${serverFilesDir}" && java -jar "/tmp/${installerJar}" --installServer`,
+          600_000
+        )
+        await run(`rm -f "/tmp/${installerJar}"`)
+
+        // Configure LinuxGSM to use run.sh (1.17+) or the forge jar (older)
+        const lgsmCfgDir = `${installDir}/lgsm/config-lgsm/${safe}`
+        await run(`mkdir -p "${lgsmCfgDir}"`)
+        const hasRunSh = existsSync(`${serverFilesDir}/run.sh`)
+        if (hasRunSh) {
+          await run(`chmod +x "${serverFilesDir}/run.sh"`)
+          await writeFile(`${lgsmCfgDir}/${safe}.cfg`, `startscript="run.sh"\n`, 'utf-8')
+        } else {
+          const { stdout: forgeJarLine } = await runLong(
+            `ls "${serverFilesDir}"/forge-*.jar 2>/dev/null | head -1 || true`
+          )
+          const forgeJarName = forgeJarLine.trim().split('/').pop() ?? `forge-${mcVersion}-${forgeVer}.jar`
+          await writeFile(`${lgsmCfgDir}/${safe}.cfg`, `executable="${forgeJarName}"\n`, 'utf-8')
+        }
+        await run(`chown -R ${GSM_USER}:${GSM_USER} "${lgsmCfgDir}"`)
       }
     })
   }
@@ -523,6 +559,169 @@ export async function getInstalledServers(): Promise<InstalledServerInfo[]> {
   } catch {
     return []
   }
+}
+
+// ── Modpack installer ────────────────────────────────────────────────────────
+
+export async function installModpack(
+  shortName: string,
+  modpackSlug: string,
+  versionId?: string
+): Promise<void> {
+  const safe = shortName.replace(/[^a-z0-9]/g, '')
+  const installDir = `${GAME_SERVERS_BASE}/${safe}`
+  const serverFilesDir = `${installDir}/serverfiles`
+  const statusKey = `modpack-${safe}`
+  const log: string[] = []
+  const startedAt = new Date().toISOString()
+
+  async function writeStatus(status: 'running' | 'success' | 'failed', step: string) {
+    await writeInstallStatus(statusKey, {
+      status, step, log, startedAt,
+      completedAt: status !== 'running' ? new Date().toISOString() : undefined,
+    })
+  }
+
+  async function logStep(step: string, fn: () => Promise<void>) {
+    log.push(`> ${step}`)
+    await writeStatus('running', step)
+    try {
+      await fn()
+      log.push(`✓ ${step}`)
+      await writeStatus('running', step)
+    } catch (err: any) {
+      const msg = String(err.message ?? err).split('\n').slice(0, 5).join('\n')
+      log.push(`✗ ${step}: ${msg}`)
+      await writeStatus('failed', step)
+      throw err
+    }
+  }
+
+  let downloadUrl = ''
+  let indexData: any = {}
+
+  // 1. Get version info from Modrinth
+  await logStep('Pobieranie informacji o modpacku z Modrinth', async () => {
+    const url = versionId
+      ? `https://api.modrinth.com/v2/version/${versionId}`
+      : `https://api.modrinth.com/v2/project/${modpackSlug}/version?featured=true&limit=5`
+    const { stdout } = await runLong(`curl -s "${url}"`, 30_000)
+    const versions = versionId ? [JSON.parse(stdout)] : JSON.parse(stdout)
+    if (!versions?.length) throw new Error('Brak wersji modpacku')
+    const ver = versions[0]
+    const mrpackFile = ver.files?.find((f: any) => f.primary || f.filename?.endsWith('.mrpack'))
+    if (!mrpackFile) throw new Error('Brak pliku .mrpack w tej wersji')
+    downloadUrl = mrpackFile.url
+    log.push(`  Wersja: ${ver.version_number}`)
+  })
+
+  // 2. Download .mrpack
+  const mrpackPath = `/tmp/${safe}-modpack-${Date.now()}.mrpack`
+  await logStep('Pobieranie paczki (.mrpack)', async () => {
+    await runLong(`curl -Lo "${mrpackPath}" "${downloadUrl}"`, 600_000)
+  })
+
+  // 3. Parse modrinth.index.json from zip
+  let mcVersion = '1.21.4'
+  let loaderType: string | null = null
+  let loaderVersion: string | null = null
+
+  await logStep('Parsowanie zawartości paczki', async () => {
+    const { stdout } = await runLong(`unzip -p "${mrpackPath}" modrinth.index.json`, 15_000)
+    indexData = JSON.parse(stdout)
+    mcVersion = indexData.dependencies?.minecraft ?? mcVersion
+    if (indexData.dependencies?.['fabric-loader']) {
+      loaderType = 'fabric'; loaderVersion = indexData.dependencies['fabric-loader']
+    } else if (indexData.dependencies?.['forge']) {
+      loaderType = 'forge'; loaderVersion = indexData.dependencies['forge']
+    } else if (indexData.dependencies?.['neoforge']) {
+      loaderType = 'neoforge'; loaderVersion = indexData.dependencies['neoforge']
+    } else if (indexData.dependencies?.['quilt-loader']) {
+      loaderType = 'quilt'; loaderVersion = indexData.dependencies['quilt-loader']
+    }
+    log.push(`  Minecraft: ${mcVersion}, Modloader: ${loaderType ?? 'vanilla'}`)
+  })
+
+  // 4. Install modloader
+  if (loaderType === 'fabric' || loaderType === 'quilt') {
+    await logStep(`Instalacja Fabric ${loaderVersion ?? ''}`, async () => {
+      const { stdout: instJson } = await runLong(`curl -s "https://meta.fabricmc.net/v2/versions/installer"`, 30_000)
+      const instUrl = JSON.parse(instJson)[0].url
+      await runLong(`curl -Lo /tmp/fabric-installer.jar "${instUrl}"`, 60_000)
+      await runLong(
+        `cd "${serverFilesDir}" && java -jar /tmp/fabric-installer.jar server -mcversion ${mcVersion}${loaderVersion ? ` -loader ${loaderVersion}` : ''} -downloadMinecraft -dir "${serverFilesDir}"`,
+        300_000
+      )
+      const lgsmCfgDir = `${installDir}/lgsm/config-lgsm/${safe}`
+      await run(`mkdir -p "${lgsmCfgDir}"`)
+      await writeFile(`${lgsmCfgDir}/${safe}.cfg`, `executable="fabric-server-launch.jar"\n`, 'utf-8')
+      await run(`chown -R ${GSM_USER}:${GSM_USER} "${lgsmCfgDir}"`)
+    })
+  } else if (loaderType === 'forge' && loaderVersion) {
+    await logStep(`Instalacja Forge ${loaderVersion}`, async () => {
+      const installerJar = `forge-${mcVersion}-${loaderVersion}-installer.jar`
+      await runLong(
+        `curl -Lo "/tmp/${installerJar}" "https://maven.minecraftforge.net/net/minecraftforge/forge/${mcVersion}-${loaderVersion}/${installerJar}"`,
+        120_000
+      )
+      await runLong(`cd "${serverFilesDir}" && java -jar "/tmp/${installerJar}" --installServer`, 600_000)
+      await run(`rm -f "/tmp/${installerJar}"`)
+      const lgsmCfgDir = `${installDir}/lgsm/config-lgsm/${safe}`
+      await run(`mkdir -p "${lgsmCfgDir}"`)
+      const hasRunSh = existsSync(`${serverFilesDir}/run.sh`)
+      if (hasRunSh) {
+        await run(`chmod +x "${serverFilesDir}/run.sh"`)
+        await writeFile(`${lgsmCfgDir}/${safe}.cfg`, `startscript="run.sh"\n`, 'utf-8')
+      }
+      await run(`chown -R ${GSM_USER}:${GSM_USER} "${lgsmCfgDir}"`)
+    })
+  } else if (loaderType === 'neoforge' && loaderVersion) {
+    await logStep(`Instalacja NeoForge ${loaderVersion}`, async () => {
+      const installerJar = `neoforge-${loaderVersion}-installer.jar`
+      await runLong(
+        `curl -Lo "/tmp/${installerJar}" "https://maven.neoforged.net/releases/net/neoforged/neoforge/${loaderVersion}/${installerJar}"`,
+        120_000
+      )
+      await runLong(`cd "${serverFilesDir}" && java -jar "/tmp/${installerJar}" --installServer`, 600_000)
+      await run(`rm -f "/tmp/${installerJar}"`)
+    })
+  }
+
+  // 5. Download server-required mods from index
+  const serverMods = (indexData.files ?? []).filter(
+    (f: any) => f.env?.server !== 'unsupported' && f.downloads?.length > 0
+  )
+  if (serverMods.length > 0) {
+    await logStep(`Pobieranie ${serverMods.length} modów`, async () => {
+      for (const f of serverMods) {
+        const destPath = path.join(serverFilesDir, f.path)
+        await run(`mkdir -p "${path.dirname(destPath)}"`)
+        await runLong(`curl -Lo "${destPath}" "${f.downloads[0]}"`, 120_000)
+        await run(`chown ${GSM_USER}:${GSM_USER} "${destPath}"`)
+      }
+    })
+  }
+
+  // 6. Extract overrides/
+  await logStep('Kopiowanie plików konfiguracyjnych (overrides)', async () => {
+    const { stdout: hasOverrides } = await runLong(
+      `unzip -l "${mrpackPath}" | grep -c "overrides/" || true`, 10_000
+    )
+    if (parseInt(hasOverrides.trim()) > 0) {
+      const extractDir = `/tmp/mrpack-extract-${safe}-${Date.now()}`
+      await runLong(`unzip -o "${mrpackPath}" "overrides/*" -d "${extractDir}/"`, 60_000)
+      await runLong(`cp -r "${extractDir}/overrides/." "${serverFilesDir}/"`, 30_000)
+      await runLong(`chown -R ${GSM_USER}:${GSM_USER} "${serverFilesDir}"`, 30_000)
+      await run(`rm -rf "${extractDir}"`)
+    }
+  })
+
+  await run(`rm -f "${mrpackPath}"`)
+  log.push('✓ Modpack zainstalowany pomyślnie!')
+  await writeInstallStatus(statusKey, {
+    status: 'success', step: 'done', log, startedAt,
+    completedAt: new Date().toISOString(),
+  })
 }
 
 export async function uninstallGameServer(shortName: string): Promise<void> {

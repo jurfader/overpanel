@@ -10,6 +10,7 @@ import path from 'path'
 import {
   GAME_SERVER_TEMPLATES,
   installGameServer,
+  installModpack,
   startGameServer,
   stopGameServer,
   restartGameServer,
@@ -559,5 +560,38 @@ export async function gameServersRoutes(fastify: FastifyInstance) {
       console.error(`[GameServers] mod delete error for ${shortName}:`, err)
       return reply.code(500).send({ success: false, error: err.message })
     }
+  })
+
+  // POST /api/game-servers/:shortName/modpacks/install — install a Modrinth modpack
+  fastify.post('/:shortName/modpacks/install', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { shortName } = request.params as { shortName: string }
+    if (!SHORT_NAME_RE.test(shortName)) {
+      return reply.code(400).send({ success: false, error: 'Nieprawidłowa nazwa serwera' })
+    }
+    const body = z.object({
+      modpackSlug: z.string().min(1).max(100),
+      versionId: z.string().optional(),
+    }).safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ success: false, error: 'Nieprawidłowe dane' })
+    }
+    reply.code(202).send({ success: true, data: { message: 'Instalacja modpacku rozpoczęta' } })
+    setImmediate(async () => {
+      try {
+        await installModpack(shortName, body.data.modpackSlug, body.data.versionId)
+      } catch (err) {
+        console.error(`[GameServers] Modpack install failed for ${shortName}:`, err)
+      }
+    })
+  })
+
+  // GET /api/game-servers/:shortName/modpacks/status — modpack install progress
+  fastify.get('/:shortName/modpacks/status', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { shortName } = request.params as { shortName: string }
+    if (!SHORT_NAME_RE.test(shortName)) {
+      return reply.code(400).send({ success: false, error: 'Nieprawidłowa nazwa serwera' })
+    }
+    const status = await readInstallStatus(`modpack-${shortName}`)
+    return reply.send({ success: true, data: status })
   })
 }
