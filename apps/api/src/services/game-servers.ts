@@ -279,27 +279,48 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
   }
 
   // 1. Ensure gsm user
-  await logStep('Tworzenie użytkownika systemowego gsm', async () => {
+  await logStep('Tworzenie użytkownika systemowego', async () => {
     await ensureGsmUser()
   })
 
-  // 2. Create install directory
+  // 2. Install system dependencies (Java, SteamCMD, libs)
+  await logStep('Instalacja zależności systemowych', async () => {
+    // Core deps for all game servers
+    await runLong(`dpkg --add-architecture i386 2>/dev/null || true`)
+    await runLong(`apt-get update -qq 2>/dev/null`)
+    await runLong(`DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl wget tar bzip2 gzip unzip bsdmainutils python3 util-linux ca-certificates binutils bc jq tmux netcat-openbsd lib32gcc-s1 lib32stdc++6 libsdl2-2.0-0:i386 2>/dev/null || true`, 120_000)
+
+    // Java for Minecraft-based servers
+    const javaServers = ['mcserver', 'mcbserver', 'pmcserver', 'vpmcserver', 'wmcserver']
+    if (javaServers.includes(safe)) {
+      await runLong(`DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-21-jre 2>/dev/null || true`, 120_000)
+    }
+
+    // SteamCMD for Source/Valve games
+    const steamServers = ['csserver', 'cs2server', 'csgoserver', 'cssserver', 'csczserver', 'tf2server', 'tfcserver', 'gmodserver', 'l4dserver', 'l4d2server', 'insserver', 'inssserver', 'dodserver', 'dodsserver', 'hl2dmserver', 'hldmserver', 'hldmsserver', 'dmcserver', 'opforserver', 'ricochetserver', 'bmdmserver', 'rustserver', 'arkserver', 'dayzserver', 'vhserver', 'sdtdserver', 'untserver', 'kf2server', 'squadserver', 'pstbsserver', 'ns2server']
+    if (steamServers.includes(safe)) {
+      await runLong(`echo steam steam/question select "I AGREE" | debconf-set-selections 2>/dev/null; echo steam steam/license note '' | debconf-set-selections 2>/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq steamcmd 2>/dev/null || true`, 120_000)
+    }
+  })
+
+  // 3. Create install directory
   await logStep('Tworzenie katalogu instalacji', async () => {
+    await run(`rm -rf ${installDir}`)
     await run(`mkdir -p ${installDir}`)
     await run(`chown ${GSM_USER}:${GSM_USER} ${installDir}`)
   })
 
-  // 3. Download LinuxGSM
+  // 4. Download LinuxGSM
   await logStep('Pobieranie LinuxGSM', async () => {
     await runLong(`su - ${GSM_USER} -c "cd ${installDir} && curl -Lo linuxgsm.sh https://linuxgsm.sh && chmod +x linuxgsm.sh"`)
   })
 
-  // 4. Install game server via LinuxGSM
-  await logStep(`Instalacja serwera: ${safe}`, async () => {
+  // 5. Setup game server via LinuxGSM
+  await logStep(`Konfiguracja serwera: ${safe}`, async () => {
     await runLong(`su - ${GSM_USER} -c "cd ${installDir} && bash linuxgsm.sh ${safe}"`, 120_000)
   })
 
-  // 5. Run server install (downloads game files — can be very slow)
+  // 6. Run server install (downloads game files — can be very slow)
   await logStep('Pobieranie plików gry (to może potrwać kilka minut...)', async () => {
     await runLong(`su - ${GSM_USER} -c "cd ${installDir} && ./${safe} auto-install"`, 1800_000) // 30 min timeout
   })
@@ -346,6 +367,11 @@ export async function installGameServer(options: GameInstallOptions): Promise<vo
       password: password ?? null, installedAt: new Date().toISOString(),
     }, null, 2)
     await writeFile(`${installDir}/overpanel-config.json`, config, 'utf-8')
+  })
+
+  // 9. Auto-start server
+  await logStep('Uruchamianie serwera', async () => {
+    await runLong(`su - ${GSM_USER} -c "cd ${installDir} && ./${safe} start"`, 120_000)
   })
 
   log.push('✓ Instalacja serwera gry zakończona pomyślnie!')
