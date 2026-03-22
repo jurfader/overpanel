@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/version-1.0.9-E91E8C?style=for-the-badge" alt="Version 1.0.9" />
+<img src="https://img.shields.io/badge/version-1.0.10-E91E8C?style=for-the-badge" alt="Version 1.0.10" />
 <img src="https://img.shields.io/badge/ubuntu-22.04%20%7C%2024.04-9B26D9?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
 <img src="https://img.shields.io/badge/license-proprietary-0A0A0F?style=for-the-badge" alt="License" />
 
@@ -181,25 +181,37 @@ Ciemny motyw z glassmorphism i neonowymi akcentami:
 
 ## Screenshots
 
-<!-- Wrzuć screeny do folderu docs/screenshots/ i odkomentuj poniższe linie -->
-
-<!--
 <div align="center">
 
-| Dashboard | Strony |
-|-----------|--------|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Strony](docs/screenshots/sites.png) |
+| Login | Dashboard |
+|-------|-----------|
+| ![Login](docs/screenshots/login.png) | ![Dashboard](docs/screenshots/dashboard.png) |
 
-| Bazy danych | Terminal |
-|-------------|----------|
-| ![Bazy](docs/screenshots/databases.png) | ![Terminal](docs/screenshots/terminal.png) |
+| Nowa strona WWW | Certyfikaty SSL |
+|-----------------|-----------------|
+| ![Nowa strona](docs/screenshots/sites-new.png) | ![SSL](docs/screenshots/ssl.png) |
 
-| Serwery gier | Poczta |
-|--------------|--------|
-| ![Games](docs/screenshots/games.png) | ![Mail](docs/screenshots/mail.png) |
+| Docker — kontenery | Docker — przegląd |
+|--------------------|-------------------|
+| ![Docker empty](docs/screenshots/docker-empty.png) | ![Docker overview](docs/screenshots/docker-overview.png) |
+
+| Docker — szablony | Katalog serwerów gier |
+|-------------------|-----------------------|
+| ![Docker templates](docs/screenshots/docker-templates.png) | ![Games catalog](docs/screenshots/games-catalog.png) |
+
+| Konsola serwera gry | Instalacja serwera |
+|---------------------|--------------------|
+| ![Games console](docs/screenshots/games-console.png) | ![Games install](docs/screenshots/games-install.png) |
+
+| FTP / SFTP | Terminal |
+|------------|----------|
+| ![FTP](docs/screenshots/ftp.png) | ![Terminal](docs/screenshots/terminal.png) |
+
+| Dyski | Aktualizacje |
+|-------|--------------|
+| ![Disks](docs/screenshots/disks.png) | ![Updates](docs/screenshots/updates.png) |
 
 </div>
--->
 
 ---
 
