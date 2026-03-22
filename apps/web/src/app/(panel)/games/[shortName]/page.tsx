@@ -475,8 +475,8 @@ export default function GameServerManagePage() {
   const fetchFiles = useCallback(async (dirPath: string) => {
     setFilesLoading(true)
     try {
-      const data = await api.get<FileEntry[]>(`/api/files/list?path=${encodeURIComponent(dirPath)}`)
-      setFileEntries(data)
+      const data = await api.get<{ entries: FileEntry[] }>(`/api/files/list?path=${encodeURIComponent(dirPath)}`)
+      setFileEntries(data.entries ?? [])
     } catch {
       setFileEntries([])
     } finally {
