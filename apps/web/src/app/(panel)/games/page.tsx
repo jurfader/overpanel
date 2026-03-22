@@ -66,6 +66,8 @@ interface ModrinthModpack {
   icon_url?: string
   downloads: number
   categories: string[]
+  version?: string       // latest version number, fetched on select
+  mcVersion?: string     // Minecraft version from latest release
 }
 
 interface Toast {
@@ -288,14 +290,30 @@ export default function GameServersPage() {
     }, 400)
   }
 
-  const handleSelectModpack = (mp: ModrinthModpack) => {
+  const handleSelectModpack = async (mp: ModrinthModpack) => {
     setFormModpack(mp)
     setModpackResults([])
     setModpackQuery('')
+
     // Auto-set server type based on modpack loader categories
     const cats = mp.categories ?? []
     if (cats.includes('fabric') || cats.includes('quilt')) setFormServerType('fabric')
     else if (cats.includes('forge') || cats.includes('neoforge')) setFormServerType('forge')
+
+    // Fetch latest version info to get version number + MC version
+    try {
+      const res = await fetch(`https://api.modrinth.com/v2/project/${mp.slug}/version?featured=true&limit=1`)
+      const versions = await res.json()
+      if (versions?.length) {
+        const ver = versions[0]
+        const mcVer = ver.game_versions?.[ver.game_versions.length - 1] ?? undefined
+        setFormModpack(prev => prev ? { ...prev, version: ver.version_number, mcVersion: mcVer } : prev)
+        // Auto-set MC version if not already set
+        if (mcVer && !formVersion) setFormVersion(mcVer)
+        // Recommend RAM: modpacks need more memory — default 4 GB
+        setFormRam('4096')
+      }
+    } catch {}
   }
 
   // ── Filters ─────────────────────────────────────────────────────────────────
@@ -659,7 +677,10 @@ export default function GameServersPage() {
                               )}
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium text-[var(--text-primary)] truncate">{formModpack.title}</p>
-                                <p className="text-[10px] text-[var(--text-muted)]">{formModpack.slug}</p>
+                                <p className="text-[10px] text-[var(--text-muted)]">
+                                  {formModpack.version ? `v${formModpack.version}` : formModpack.slug}
+                                  {formModpack.mcVersion ? ` · MC ${formModpack.mcVersion}` : ''}
+                                </p>
                               </div>
                               <button
                                 onClick={() => setFormModpack(null)}
