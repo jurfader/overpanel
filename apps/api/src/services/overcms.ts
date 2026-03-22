@@ -252,7 +252,7 @@ ${composeOverride}
 COMPEOF`)
   })
 
-  // 4b. Patch portal Dockerfile — add missing COPY for tsconfig.base.json
+  // 4b. Patch portal Dockerfile & source — fix missing files and TS errors
   await logStep('Przygotowanie Dockerfile portalu', async () => {
     const portalDockerfile = `${installDir}/app/apps/portal/Dockerfile`
     if (existsSync(portalDockerfile)) {
@@ -261,6 +261,8 @@ COMPEOF`)
       // Also copy shared packages if referenced
       await run(`sed -i '/COPY tsconfig.base.json/a COPY packages ./packages' ${portalDockerfile}`)
     }
+    // Fix TS unused-variable errors in portal source
+    await run(`sed -i 's/const canceled = false/const _canceled = false/' ${installDir}/app/apps/portal/src/app/page.tsx 2>/dev/null || true`)
   })
 
   const dc = `cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml`
