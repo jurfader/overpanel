@@ -408,9 +408,29 @@ export async function sitesRoutes(fastify: FastifyInstance) {
             if (stderr.trim()) log.push(stderr.trim())
           })
 
+          await runStep('Przygotowanie plików budowania', async () => {
+            // Patch portal Dockerfile if needed
+            const { existsSync } = await import('fs')
+            const portalDockerfile = `${installDir}/app/apps/portal/Dockerfile`
+            if (existsSync(portalDockerfile)) {
+              const { readFile: rf } = await import('fs/promises')
+              const df = await rf(portalDockerfile, 'utf-8')
+              if (!df.includes('tsconfig.base.json')) {
+                await execAsync(`sed -i '/COPY apps\\/portal/a COPY tsconfig.base.json ./' ${portalDockerfile}`)
+                await execAsync(`sed -i '/COPY tsconfig.base.json/a COPY packages ./packages' ${portalDockerfile}`)
+              }
+            }
+            // Create .env.local for portal build-time vars
+            const licServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://51.38.137.199:3002'
+            const envRaw2 = await readFile(`${installDir}/app/.env`, 'utf-8')
+            const domainMatch = envRaw2.match(/API_DOMAIN=(.+)/)
+            const siteDomain = domainMatch?.[1]?.trim() ?? safeDomain
+            await writeFile(`${installDir}/app/apps/portal/.env.local`, `NEXT_PUBLIC_LICENSE_SERVER_URL=${licServerUrl}\nNEXT_PUBLIC_API_URL=https://${siteDomain}\nNEXT_PUBLIC_SITE_URL=https://${siteDomain}\n`)
+          })
+
           await runStep('Przebudowanie obrazów Docker', async () => {
-            const { stdout } = await execAsync(`${dc} up -d --build 2>&1`, { timeout: 600_000 })
-            if (stdout.trim()) stdout.trim().split('\n').slice(-10).forEach(l => log.push(l))
+            await execAsync(`${dc} build --no-cache 2>&1`, { timeout: 600_000 })
+            await execAsync(`${dc} up -d 2>&1`, { timeout: 120_000 })
           })
 
           await runStep('Migracja bazy danych', async () => {
