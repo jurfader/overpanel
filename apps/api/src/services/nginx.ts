@@ -155,9 +155,10 @@ interface OverCmsProxyOptions {
   domain: string
   apiPort: number
   adminPort: number
+  sitePort: number
 }
 
-export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: OverCmsProxyOptions): Promise<void> {
+export async function createNginxOverCmsProxy({ domain, apiPort, adminPort, sitePort }: OverCmsProxyOptions): Promise<void> {
   const safeDomain = esc(domain)
 
   const config = `server {
@@ -192,11 +193,17 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort }: Ov
         proxy_cache_bypass $http_upgrade;
     }
 
-    # Client website — static files or future template
+    # Client website (OverCMS site template)
     location / {
-        root /var/www/${safeDomain}/public;
-        index index.html;
-        try_files $uri $uri/ /index.html;
+        proxy_pass http://127.0.0.1:${sitePort};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_cache_bypass $http_upgrade;
     }
 
     add_header X-Content-Type-Options nosniff;

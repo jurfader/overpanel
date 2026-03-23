@@ -81,7 +81,7 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
   adminUrl: string
   apiPort: number
   adminPort: number
-  portalPort: number
+  sitePort: number
 }> {
   const { domain, adminEmail, adminPassword, licenseKey } = options
   const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
@@ -92,6 +92,7 @@ export async function installOverCms(options: OverCmsInstallOptions): Promise<{
   const apiPort = portBase
   const adminPort = portBase + 1
   const licensePort = portBase + 2
+  const sitePort = portBase + 3
   const portalPort = portBase + 4
   const pgPort = portBase + 5
   const redisPort = portBase + 6
@@ -187,6 +188,9 @@ SITE_URL=https://${domain}
 
 # Portal
 PORTAL_DOMAIN=${domain}
+
+# Site (client website)
+SITE_DOMAIN=${domain}
 NEXT_PUBLIC_SITE_URL=https://${domain}
 NEXT_PUBLIC_LICENSE_SERVER_URL=${licenseServerUrl}
 
@@ -228,6 +232,12 @@ services:
       - HOSTNAME=0.0.0.0
     ports:
       - "${adminPort}:3001"
+  site:
+    container_name: overcms-site-${containerPrefix}
+    environment:
+      - HOSTNAME=0.0.0.0
+    ports:
+      - "${sitePort}:3005"
   portal:
     profiles: ["disabled"]
   license-server:
@@ -288,7 +298,7 @@ COMPEOF`)
   // 8. Store port mapping
   await logStep('Zapisywanie konfiguracji portów', async () => {
     await run(`cat > ${installDir}/ports.json << 'EOF'
-{"apiPort":${apiPort},"adminPort":${adminPort},"licensePort":${licensePort},"portalPort":${portalPort},"pgPort":${pgPort},"redisPort":${redisPort},"minioPort":${minioPort}}
+{"apiPort":${apiPort},"adminPort":${adminPort},"sitePort":${sitePort},"licensePort":${licensePort},"portalPort":${portalPort},"pgPort":${pgPort},"redisPort":${redisPort},"minioPort":${minioPort}}
 EOF`)
   })
 
@@ -300,7 +310,7 @@ EOF`)
     adminUrl: `http://localhost:${adminPort}`,
     apiPort,
     adminPort,
-    portalPort,
+    sitePort,
   }
 }
 
