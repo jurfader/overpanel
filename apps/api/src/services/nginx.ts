@@ -190,9 +190,9 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort, port
         client_max_body_size 50M;
     }
 
-    # Admin panel — strip /admin prefix so Next.js receives /
-    location /admin/ {
-        proxy_pass http://127.0.0.1:${adminPort}/;
+    # Admin panel (expects basePath: '/admin' in Next.js config)
+    location /admin {
+        proxy_pass http://127.0.0.1:${adminPort};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -201,9 +201,6 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort, port
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_cache_bypass $http_upgrade;
-    }
-    location = /admin {
-        return 301 /admin/;
     }
 
     # Public website (portal)
