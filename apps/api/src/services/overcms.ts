@@ -224,6 +224,8 @@ services:
     build:
       args:
         NEXT_PUBLIC_API_URL: https://${domain}
+    environment:
+      - HOSTNAME=0.0.0.0
     ports:
       - "${adminPort}:3001"
   portal:
@@ -233,6 +235,8 @@ services:
         NEXT_PUBLIC_API_URL: https://${domain}
         NEXT_PUBLIC_SITE_URL: https://${domain}
         NEXT_PUBLIC_LICENSE_SERVER_URL: ${licenseServerUrl}
+    environment:
+      - HOSTNAME=0.0.0.0
     ports:
       - "${portalPort}:3004"
   license-server:
