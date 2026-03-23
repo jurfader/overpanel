@@ -9,7 +9,7 @@ import { Globe, Lock, ArrowLeft, X, Loader2, CheckCircle2, AlertCircle } from 'l
 
 // ── Site types ─────────────────────────────────────────────────────────────────
 
-type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy' | 'overcms'
+type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy' | 'overcms' | 'openclaw'
 
 interface SiteTypeOption {
   id: SiteType
@@ -89,6 +89,20 @@ const SITE_TYPES: SiteTypeOption[] = [
     ),
   },
   {
+    id: 'openclaw',
+    label: 'OpenClaw AI',
+    description: 'Asystent AI — Docker + WebSocket gateway',
+    available: true,
+    accent: '#10B981',
+    icon: (
+      <svg viewBox="0 0 32 32" fill="none" className="w-10 h-10">
+        <circle cx="16" cy="16" r="14" fill="#10B981" opacity="0.15" />
+        <circle cx="16" cy="16" r="14" stroke="#10B981" strokeWidth="1.5" opacity="0.4" />
+        <text x="16" y="21" textAnchor="middle" fill="#10B981" fontSize="7" fontWeight="800" fontFamily="monospace">AI</text>
+      </svg>
+    ),
+  },
+  {
     id: 'python',
     label: 'Python',
     description: 'Gunicorn / uWSGI + Nginx proxy',
@@ -154,6 +168,12 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   const [cmsLicenseKey, setCmsLicenseKey] = useState('')
   const [cmsAdminEmail, setCmsAdminEmail] = useState('')
   const [cmsAdminPassword, setCmsAdminPassword] = useState('')
+
+  // OpenClaw-specific
+  const [openaiKey, setOpenaiKey] = useState('')
+  const [anthropicKey, setAnthropicKey] = useState('')
+  const [telegramToken, setTelegramToken] = useState('')
+  const [discordToken, setDiscordToken] = useState('')
 
   // Install progress (OverCMS)
   const [installLog, setInstallLog] = useState<string[]>([])
@@ -280,6 +300,19 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
         setLoading(false)
         startPolling(domain)
         return
+      } else if (siteType === 'openclaw') {
+        await api.post('/api/sites', {
+          domain,
+          siteType: 'openclaw',
+          enableSsl,
+          openaiApiKey: openaiKey || undefined,
+          anthropicApiKey: anthropicKey || undefined,
+          telegramToken: telegramToken || undefined,
+          discordToken: discordToken || undefined,
+        })
+        setLoading(false)
+        startPolling(domain)
+        return
       } else if (siteType === 'nodejs') {
         await api.post('/api/sites', {
           domain,
@@ -309,6 +342,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
 
   const isWordPress = siteType === 'wordpress'
   const isOverCms = siteType === 'overcms'
+  const isOpenClaw = siteType === 'openclaw'
   const isStatic = siteType === 'static'
   const isNodeJs = siteType === 'nodejs'
   const isPhpBased = siteType === 'php' || siteType === 'wordpress'
@@ -571,8 +605,57 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                   </>
                 )}
 
+                {/* OpenClaw fields */}
+                {isOpenClaw && (
+                  <>
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">OpenClaw AI</p>
+                      <div className="space-y-3">
+                        <FieldInput
+                          label="Klucz API OpenAI"
+                          value={openaiKey}
+                          onChange={setOpenaiKey}
+                          placeholder="sk-..."
+                          type="password"
+                          hint="Opcjonalny jeśli podasz klucz Anthropic"
+                        />
+                        <FieldInput
+                          label="Klucz API Anthropic"
+                          value={anthropicKey}
+                          onChange={setAnthropicKey}
+                          placeholder="sk-ant-..."
+                          type="password"
+                          hint="Opcjonalny jeśli podasz klucz OpenAI"
+                        />
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">Kanały (opcjonalne)</p>
+                      <div className="space-y-3">
+                        <FieldInput
+                          label="Telegram Bot Token"
+                          value={telegramToken}
+                          onChange={setTelegramToken}
+                          placeholder="123456:ABC-..."
+                          type="password"
+                        />
+                        <FieldInput
+                          label="Discord Bot Token"
+                          value={discordToken}
+                          onChange={setDiscordToken}
+                          placeholder="MTk..."
+                          type="password"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      Wymagany jest co najmniej jeden klucz API (OpenAI lub Anthropic). Kanały komunikacji można skonfigurować później.
+                    </p>
+                  </>
+                )}
+
                 {/* SSL toggle — not for WP (always on) */}
-                {!isWordPress && !isOverCms && (
+                {!isWordPress && !isOverCms && !isOpenClaw && (
                   <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">

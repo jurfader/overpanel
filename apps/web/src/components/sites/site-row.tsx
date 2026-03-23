@@ -146,7 +146,7 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
   const updatePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
 
-  const hasCms = site.hasWordpress || site.siteType === 'overcms'
+  const hasCms = site.hasWordpress || site.siteType === 'overcms' || site.siteType === 'openclaw'
 
   useEffect(() => {
     if (!hasCms) return

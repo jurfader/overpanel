@@ -18,7 +18,7 @@ async function getUserCfToken(userId: string): Promise<string | null> {
 
 const createSiteSchema = z.object({
   domain: z.string().min(3).regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain'),
-  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms']).default('php'),
+  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms', 'openclaw']).default('php'),
   adminEmail: z.string().email().optional(),
   adminPassword: z.string().optional(),
   licenseKey: z.string().optional(),
@@ -27,6 +27,12 @@ const createSiteSchema = z.object({
   startCommand: z.string().max(200).optional(),
   enableSsl: z.boolean().default(true),
   userId: z.string().optional(), // admin może przypisać do klienta
+  // OpenClaw fields
+  openaiApiKey: z.string().optional(),
+  anthropicApiKey: z.string().optional(),
+  telegramToken: z.string().optional(),
+  discordToken: z.string().optional(),
+  slackToken: z.string().optional(),
 })
 
 export async function sitesRoutes(fastify: FastifyInstance) {
@@ -99,6 +105,11 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // OpenClaw wymaga min. 1 klucza API
+    if (siteType === 'openclaw' && !body.data.openaiApiKey?.trim() && !body.data.anthropicApiKey?.trim()) {
+      return reply.code(400).send({ success: false, error: 'Wymagany jest klucz API OpenAI lub Anthropic do instalacji OpenClaw' })
+    }
+
     // Klient może tworzyć tylko dla siebie
     const ownerId = caller.role === 'admin' && userId ? userId : caller.id
 
@@ -133,8 +144,8 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         }
 
         // 2. Nginx vhost — type-aware
-        if (siteType === 'overcms') {
-          // OverCMS gets its own nginx proxy after Docker containers are up (see step 2b)
+        if (siteType === 'overcms' || siteType === 'openclaw') {
+          // Docker-based apps get their own nginx proxy after containers are up
         } else if (siteType === 'nodejs' || siteType === 'python' || siteType === 'proxy') {
           const port = appPort ?? 3000
           await createNginxNodeProxy({ domain, appPort: port })
@@ -142,7 +153,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
           // php, static — use standard PHP-FPM vhost (static ignores PHP blocks but that's harmless)
           await createNginxVhost({ domain, documentRoot, phpVersion })
         }
-        if (siteType !== 'overcms') {
+        if (siteType !== 'overcms' && siteType !== 'openclaw') {
           await reloadNginx()
         }
 
@@ -191,6 +202,29 @@ export async function sitesRoutes(fastify: FastifyInstance) {
             overcmsOk = false
             console.error(`[OverCMS] Install failed for ${domain}:`, err.message)
             // Don't proceed with tunnel/DNS — no nginx vhost exists
+            await prisma.site.update({ where: { id: site.id }, data: { status: 'inactive' } })
+            return
+          }
+        }
+
+        // 2c. OpenClaw installation
+        if (siteType === 'openclaw') {
+          try {
+            const { installOpenClaw } = await import('../services/openclaw.js')
+            const { createNginxOpenClawProxy } = await import('../services/nginx.js')
+            const result = await installOpenClaw({
+              domain,
+              openaiApiKey: body.data.openaiApiKey,
+              anthropicApiKey: body.data.anthropicApiKey,
+              telegramToken: body.data.telegramToken,
+              discordToken: body.data.discordToken,
+              slackToken: body.data.slackToken,
+            })
+            await createNginxOpenClawProxy({ domain, gatewayPort: result.gatewayPort })
+            await reloadNginx()
+            console.log(`[OpenClaw] Installed for ${domain}: Gateway=${result.gatewayPort}`)
+          } catch (err: any) {
+            console.error(`[OpenClaw] Install failed for ${domain}:`, err.message)
             await prisma.site.update({ where: { id: site.id }, data: { status: 'inactive' } })
             return
           }
@@ -260,11 +294,13 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     return reply.code(201).send({ success: true, data: site })
   })
 
-  // GET /api/sites/install-status/:domain — live install progress
+  // GET /api/sites/install-status/:domain — live install progress (OverCMS + OpenClaw)
   fastify.get('/install-status/:domain', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { domain } = request.params as { domain: string }
-    const { readInstallStatus } = await import('../services/overcms.js')
-    const data = await readInstallStatus(domain)
+    // Try OverCMS first, then OpenClaw
+    const { readInstallStatus: readOverCms } = await import('../services/overcms.js')
+    const { readInstallStatus: readOpenClaw } = await import('../services/openclaw.js')
+    const data = await readOverCms(domain) ?? await readOpenClaw(domain)
     return reply.send({ success: true, data })
   })
 
@@ -469,7 +505,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     const schema = z.object({
       status: z.enum(['active', 'inactive']).optional(),
       phpVersion: z.enum(['7.4', '8.0', '8.1', '8.2', '8.3']).optional(),
-      siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms']).optional(),
+      siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms', 'openclaw']).optional(),
     })
     const body = schema.safeParse(request.body)
     if (!body.success) return reply.code(400).send({ success: false, error: 'Invalid input' })
@@ -639,7 +675,16 @@ export async function sitesRoutes(fastify: FastifyInstance) {
 
     setImmediate(async () => {
       try {
-        await removeDomainFromTunnel(site.domain).catch(() => {}) // ignoruj błąd gdy tunnel nieaktywny
+        // Uninstall Docker apps
+        if (site.siteType === 'openclaw') {
+          const { uninstallOpenClaw } = await import('../services/openclaw.js')
+          await uninstallOpenClaw(site.domain).catch((e) => console.warn(`[OpenClaw] Uninstall:`, e))
+        }
+        if (site.siteType === 'overcms') {
+          const { uninstallOverCms } = await import('../services/overcms.js')
+          await uninstallOverCms(site.domain).catch((e) => console.warn(`[OverCMS] Uninstall:`, e))
+        }
+        await removeDomainFromTunnel(site.domain).catch(() => {})
         await deleteNginxVhost(site.domain)
         await reloadNginx()
         await deleteSystemUser(site.domain)
