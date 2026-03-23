@@ -229,16 +229,7 @@ services:
     ports:
       - "${adminPort}:3001"
   portal:
-    container_name: overcms-portal-${containerPrefix}
-    build:
-      args:
-        NEXT_PUBLIC_API_URL: https://${domain}
-        NEXT_PUBLIC_SITE_URL: https://${domain}
-        NEXT_PUBLIC_LICENSE_SERVER_URL: ${licenseServerUrl}
-    environment:
-      - HOSTNAME=0.0.0.0
-    ports:
-      - "${portalPort}:3004"
+    profiles: ["disabled"]
   license-server:
     container_name: overcms-license-${containerPrefix}
     image: busybox
@@ -254,25 +245,6 @@ services:
     await run(`cat > ${installDir}/app/docker-compose.override.yml << 'COMPEOF'
 ${composeOverride}
 COMPEOF`)
-  })
-
-  // 4b. Patch portal Dockerfile & source — fix missing files and TS errors
-  await logStep('Przygotowanie Dockerfile portalu', async () => {
-    const portalDockerfile = `${installDir}/app/apps/portal/Dockerfile`
-    if (existsSync(portalDockerfile)) {
-      // Insert COPY tsconfig.base.json before the portal build step
-      await run(`sed -i '/COPY apps\\/portal/a COPY tsconfig.base.json ./' ${portalDockerfile}`)
-      // Also copy shared packages if referenced
-      await run(`sed -i '/COPY tsconfig.base.json/a COPY packages ./packages' ${portalDockerfile}`)
-      // Create .env.local for portal — Next.js reads it at build time automatically
-      await run(`cat > ${installDir}/app/apps/portal/.env.local << 'PORTALENV'
-NEXT_PUBLIC_LICENSE_SERVER_URL=${licenseServerUrl}
-NEXT_PUBLIC_API_URL=https://${domain}
-NEXT_PUBLIC_SITE_URL=https://${domain}
-PORTALENV`)
-    }
-    // Fix TS unused-variable errors in portal source
-    await run(`sed -i 's/const canceled = false/const _canceled = false/' ${installDir}/app/apps/portal/src/app/page.tsx 2>/dev/null || true`)
   })
 
   const dc = `cd ${installDir}/app && docker compose -f docker-compose.prod.yml -f docker-compose.override.yml`

@@ -169,7 +169,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
               adminPassword: body.data.adminPassword || 'Admin123!',
               licenseKey: body.data.licenseKey,
             })
-            await createNginxOverCmsProxy({ domain, apiPort: result.apiPort, adminPort: result.adminPort, portalPort: result.portalPort })
+            await createNginxOverCmsProxy({ domain, apiPort: result.apiPort, adminPort: result.adminPort })
             await reloadNginx()
             console.log(`[OverCMS] Installed for ${domain}: API=${result.apiPort}, Admin=${result.adminPort}`)
 
@@ -442,26 +442,6 @@ export async function sitesRoutes(fastify: FastifyInstance) {
             )
             if (stdout.trim()) log.push(stdout.trim())
             if (stderr.trim()) log.push(stderr.trim())
-          })
-
-          await runStep('Przygotowanie plików budowania', async () => {
-            const { existsSync } = await import('fs')
-            const { readFile: readF } = await import('fs/promises')
-            // Patch portal Dockerfile if needed
-            const portalDockerfile = `${installDir}/app/apps/portal/Dockerfile`
-            if (existsSync(portalDockerfile)) {
-              const df = await readF(portalDockerfile, 'utf-8')
-              if (!df.includes('tsconfig.base.json')) {
-                await execAsync(`sed -i '/COPY apps\\/portal/a COPY tsconfig.base.json ./' ${portalDockerfile}`)
-                await execAsync(`sed -i '/COPY tsconfig.base.json/a COPY packages ./packages' ${portalDockerfile}`)
-              }
-            }
-            // Create .env.local for portal build-time vars
-            const licServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://51.38.137.199:3002'
-            const envRaw2 = await readF(`${installDir}/app/.env`, 'utf-8')
-            const domainMatch = envRaw2.match(/API_DOMAIN=(.+)/)
-            const siteDomain = domainMatch?.[1]?.trim() ?? safeDomain
-            await writeFile(`${installDir}/app/apps/portal/.env.local`, `NEXT_PUBLIC_LICENSE_SERVER_URL=${licServerUrl}\nNEXT_PUBLIC_API_URL=https://${siteDomain}\nNEXT_PUBLIC_SITE_URL=https://${siteDomain}\n`)
           })
 
           await runStep('Przebudowanie obrazów Docker', async () => {
