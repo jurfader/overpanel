@@ -25,6 +25,9 @@ import {
   Archive,
   Clock,
   RotateCcw,
+  Server,
+  Play,
+  Shield,
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
@@ -290,6 +293,62 @@ export default function BackupsPage() {
       .then(setS3Status).catch(() => {})
   }, [])
 
+  // NAS state
+  const [nasStatus, setNasStatus] = useState<{ configured: boolean; disk?: { total: number; used: number; available: number; percent: number } } | null>(null)
+  const [nasBackups, setNasBackups] = useState<{ filename: string; sizeMb: number; date: string; type: 'daily' | 'system-image' }[]>([])
+  const [nasLoading, setNasLoading] = useState(true)
+  const [nasRestoring, setNasRestoring] = useState<string | null>(null)
+  const [nasTriggering, setNasTriggering] = useState(false)
+
+  const fetchNas = useCallback(async () => {
+    if (user?.role !== 'admin') return
+    setNasLoading(true)
+    try {
+      const [status, backups] = await Promise.all([
+        api.get<{ configured: boolean; disk?: any }>('/api/backups/nas/status'),
+        api.get<any[]>('/api/backups/nas/list'),
+      ])
+      setNasStatus(status)
+      setNasBackups(backups)
+    } catch { /* NAS not configured */ } finally {
+      setNasLoading(false)
+    }
+  }, [user?.role])
+
+  useEffect(() => { fetchNas() }, [fetchNas])
+
+  const handleNasRestore = async (filename: string) => {
+    if (!confirm(`Przywrócić backup ${filename}? Nadpisze aktualne pliki i bazy danych.`)) return
+    setNasRestoring(filename)
+    try {
+      const res = await api.post<{ log: string[] }>('/api/backups/nas/restore', { filename })
+      alert(res.log.join('\n'))
+      fetchBackups()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Błąd przywracania')
+    } finally {
+      setNasRestoring(null)
+    }
+  }
+
+  const handleNasDelete = async (filename: string, type: string) => {
+    if (!confirm(`Usunąć backup ${filename} z NAS?`)) return
+    try {
+      await api.delete(`/api/backups/nas/${encodeURIComponent(filename)}?type=${type}`)
+      fetchNas()
+    } catch { alert('Błąd usuwania') }
+  }
+
+  const handleNasTrigger = async (type: 'daily' | 'system-image') => {
+    setNasTriggering(true)
+    try {
+      await api.post('/api/backups/nas/trigger', { type })
+      alert(type === 'system-image' ? 'Tworzenie obrazu systemu rozpoczęte (może potrwać kilka minut)' : 'Backup NAS rozpoczęty')
+    } catch { alert('Błąd') } finally {
+      setNasTriggering(false)
+    }
+  }
+
   const [siteFilter, setSiteFilter] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [files, setFiles] = useState<BackupFile[]>([])
@@ -478,6 +537,96 @@ export default function BackupsPage() {
             color="blue"
           />
         </div>
+
+        {/* NAS Backup Section */}
+        {user?.role === 'admin' && nasStatus?.configured && (
+          <Card>
+            <CardHeader>
+              <div className="w-8 h-8 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <Server className="w-4 h-4 text-green-400" />
+              </div>
+              <CardTitle>Backup NAS</CardTitle>
+              {nasStatus.disk && (
+                <div className="ml-auto flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-xs text-[var(--text-muted)]">Zajęte {nasStatus.disk.percent}%</p>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      {formatSize(nasStatus.disk.used / (1024 * 1024))} / {formatSize(nasStatus.disk.total / (1024 * 1024))}
+                    </p>
+                  </div>
+                  <div className="w-24 h-2 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${nasStatus.disk.percent > 90 ? 'bg-red-500' : nasStatus.disk.percent > 70 ? 'bg-amber-500' : 'bg-green-500'}`}
+                      style={{ width: `${nasStatus.disk.percent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2 mb-4">
+                <Button size="sm" onClick={() => handleNasTrigger('daily')} loading={nasTriggering}>
+                  <Play className="w-3.5 h-3.5" /> Backup teraz
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => handleNasTrigger('system-image')} loading={nasTriggering}>
+                  <Shield className="w-3.5 h-3.5" /> Obraz systemu
+                </Button>
+                <Button size="sm" variant="secondary" className="ml-auto" onClick={fetchNas}>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+
+              {nasLoading ? (
+                <div className="py-6 flex justify-center">
+                  <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : nasBackups.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)] py-4 text-center">Brak backupów na NAS</p>
+              ) : (
+                <div className="space-y-1">
+                  {nasBackups.map((b) => (
+                    <div
+                      key={b.filename}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.03] group transition-colors"
+                    >
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${b.type === 'system-image' ? 'bg-purple-500/10' : 'bg-green-500/10'}`}>
+                        {b.type === 'system-image' ? <Shield className="w-3.5 h-3.5 text-purple-400" /> : <Archive className="w-3.5 h-3.5 text-green-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate font-mono">{b.filename}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{b.date} &middot; {formatSize(b.sizeMb)}</p>
+                      </div>
+                      <Badge variant={b.type === 'system-image' ? 'brand' : 'success'}>
+                        {b.type === 'system-image' ? 'System' : 'Dzienny'}
+                      </Badge>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {b.type === 'daily' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => handleNasRestore(b.filename)}
+                            loading={nasRestoring === b.filename}
+                            title="Przywróć"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleNasDelete(b.filename, b.type)}
+                          title="Usuń z NAS"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Toolbar */}
         <div className="flex items-center gap-3 flex-wrap">

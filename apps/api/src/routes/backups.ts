@@ -360,4 +360,82 @@ export async function backupsRoutes(fastify: FastifyInstance) {
       },
     })
   })
+
+  // ── NAS Backup Endpoints ──────────────────────────────────────────────────
+
+  // GET /api/backups/nas/status — NAS disk info + configured status
+  fastify.get('/nas/status', { preHandler: [adminOnly] }, async (_req, reply) => {
+    const { isNasConfigured, getNasDiskInfo } = await import('../services/nas.js')
+    if (!isNasConfigured()) {
+      return reply.send({ success: true, data: { configured: false } })
+    }
+    const disk = await getNasDiskInfo()
+    return reply.send({ success: true, data: { configured: true, disk } })
+  })
+
+  // GET /api/backups/nas/list — list all NAS backups
+  fastify.get('/nas/list', { preHandler: [adminOnly] }, async (_req, reply) => {
+    const { isNasConfigured, listNasBackups } = await import('../services/nas.js')
+    if (!isNasConfigured()) {
+      return reply.send({ success: true, data: [] })
+    }
+    const backups = await listNasBackups()
+    return reply.send({ success: true, data: backups })
+  })
+
+  // POST /api/backups/nas/restore — restore from NAS daily backup
+  fastify.post('/nas/restore', { preHandler: [adminOnly] }, async (request, reply) => {
+    const schema = z.object({ filename: z.string().min(1) })
+    const body = schema.safeParse(request.body)
+    if (!body.success) return reply.code(400).send({ success: false, error: 'Invalid input' })
+
+    if (body.data.filename.includes('/') || body.data.filename.includes('..')) {
+      return reply.code(400).send({ success: false, error: 'Invalid filename' })
+    }
+
+    const { restoreFromNasBackup } = await import('../services/nas.js')
+    try {
+      const log = await restoreFromNasBackup(body.data.filename)
+      return reply.send({ success: true, data: { log } })
+    } catch (err: any) {
+      return reply.code(500).send({ success: false, error: err.message })
+    }
+  })
+
+  // DELETE /api/backups/nas/:filename — delete NAS backup
+  fastify.delete('/nas/:filename', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { filename } = request.params as { filename: string }
+    const { type } = request.query as { type?: string }
+    if (filename.includes('/') || filename.includes('..')) {
+      return reply.code(400).send({ success: false, error: 'Invalid filename' })
+    }
+    const { deleteNasBackup } = await import('../services/nas.js')
+    try {
+      await deleteNasBackup(filename, type === 'system-image' ? 'system-image' : 'daily')
+      return reply.send({ success: true, data: null })
+    } catch (err: any) {
+      return reply.code(500).send({ success: false, error: err.message })
+    }
+  })
+
+  // POST /api/backups/nas/trigger — trigger backup now
+  fastify.post('/nas/trigger', { preHandler: [adminOnly] }, async (request, reply) => {
+    const { type } = request.body as { type?: string }
+    const { triggerDailyBackup, triggerSystemImageBackup } = await import('../services/nas.js')
+
+    reply.code(202).send({ success: true, data: { message: 'Backup uruchomiony' } })
+
+    setImmediate(async () => {
+      try {
+        if (type === 'system-image') {
+          await triggerSystemImageBackup()
+        } else {
+          await triggerDailyBackup()
+        }
+        console.log(`[NAS] ${type === 'system-image' ? 'System image' : 'Daily'} backup completed`)
+      } catch (err: any) {
+        console.error(`[NAS] Backup failed:`, err.message)
+      }
+    })
+  })
 }
