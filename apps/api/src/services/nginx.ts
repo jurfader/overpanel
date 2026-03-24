@@ -180,6 +180,18 @@ export async function createNginxOverCmsProxy({ domain, apiPort, adminPort, site
         client_max_body_size 50M;
     }
 
+    # Media uploads (served by API)
+    location /uploads/ {
+        proxy_pass http://127.0.0.1:${apiPort};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+    }
+
     # Admin panel (expects basePath: '/admin' in Next.js config)
     location /admin {
         proxy_pass http://127.0.0.1:${adminPort};
