@@ -366,7 +366,7 @@ export async function backupsRoutes(fastify: FastifyInstance) {
   // GET /api/backups/nas/status — NAS disk info + configured status
   fastify.get('/nas/status', { preHandler: [adminOnly] }, async (_req, reply) => {
     const { isNasConfigured, getNasDiskInfo } = await import('../services/nas.js')
-    if (!isNasConfigured()) {
+    if (!(await isNasConfigured())) {
       return reply.send({ success: true, data: { configured: false } })
     }
     const disk = await getNasDiskInfo()
@@ -376,7 +376,7 @@ export async function backupsRoutes(fastify: FastifyInstance) {
   // GET /api/backups/nas/list — list all NAS backups
   fastify.get('/nas/list', { preHandler: [adminOnly] }, async (_req, reply) => {
     const { isNasConfigured, listNasBackups } = await import('../services/nas.js')
-    if (!isNasConfigured()) {
+    if (!(await isNasConfigured())) {
       return reply.send({ success: true, data: [] })
     }
     const backups = await listNasBackups()

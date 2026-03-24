@@ -77,6 +77,10 @@ const SETTING_KEYS = [
   'mail_stalwart_token',
   'mail_roundcube_url',
   'mail_default_quota_mb',
+  // NAS backup
+  'nas_host',
+  'nas_user',
+  'nas_backup_dir',
 ] as const
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -144,6 +148,10 @@ export async function settingsRoutes(fastify: FastifyInstance) {
       mail_stalwart_token: z.string().optional(),
       mail_roundcube_url: z.string().optional(),
       mail_default_quota_mb: z.string().regex(/^\d+$/, 'mail_default_quota_mb must be numeric').optional(),
+      // NAS backup
+      nas_host: z.string().optional(),
+      nas_user: z.string().optional(),
+      nas_backup_dir: z.string().optional(),
     })
 
     const parsed = bodySchema.safeParse(request.body)
@@ -159,6 +167,12 @@ export async function settingsRoutes(fastify: FastifyInstance) {
       if (value !== undefined) {
         await setSetting(key, value)
       }
+    }
+
+    // Clear NAS config cache if NAS settings changed
+    if (updates.nas_host !== undefined || updates.nas_user !== undefined || updates.nas_backup_dir !== undefined) {
+      const { clearNasConfigCache } = await import('../services/nas.js')
+      clearNasConfigCache()
     }
 
     const data = await getSettings([...SETTING_KEYS])

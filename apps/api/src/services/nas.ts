@@ -1,28 +1,65 @@
 /**
- * NAS backup management — connects to Zyxel NAS via SSH/SCP
+ * NAS backup management — connects to NAS via SSH/SCP
+ * Configuration read from environment or panel settings.
  */
 
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
+import { prisma } from '@overpanel/db'
 
 const execAsync = promisify(exec)
 
 const NAS_PASSWORD_FILE = '/root/.nas-password'
 const SSH_OPTS = '-o HostKeyAlgorithms=+ssh-rsa -o StrictHostKeyChecking=no'
-const NAS_HOST = 'admin@192.168.100.74'
-const NAS_BACKUP_DIR = '/i-data/30b7c0d2/BACKUP'
 
-function sshCmd(cmd: string): string {
-  return `sshpass -f ${NAS_PASSWORD_FILE} ssh ${SSH_OPTS} ${NAS_HOST} "${cmd}"`
+// ── Config from DB settings ─────────────────────────────────────────────────
+
+interface NasConfig {
+  host: string      // user@ip
+  backupDir: string  // remote path
 }
 
-function scpFrom(remote: string, local: string): string {
-  return `sshpass -f ${NAS_PASSWORD_FILE} scp ${SSH_OPTS} ${NAS_HOST}:${remote} ${local}`
+let _configCache: NasConfig | null = null
+let _configCacheTime = 0
+
+async function getNasConfig(): Promise<NasConfig | null> {
+  // Cache for 60s
+  if (_configCache && Date.now() - _configCacheTime < 60_000) return _configCache
+
+  const rows = await prisma.setting.findMany({
+    where: { key: { in: ['nas_host', 'nas_user', 'nas_backup_dir'] } },
+  })
+  const map = Object.fromEntries(rows.map(r => [r.key, r.value]))
+
+  const nasHost = map.nas_host || process.env.NAS_HOST || ''
+  const nasUser = map.nas_user || process.env.NAS_USER || 'admin'
+  const backupDir = map.nas_backup_dir || process.env.NAS_BACKUP_DIR || ''
+
+  if (!nasHost || !backupDir) return null
+
+  _configCache = { host: `${nasUser}@${nasHost}`, backupDir }
+  _configCacheTime = Date.now()
+  return _configCache
 }
 
-export function isNasConfigured(): boolean {
-  return existsSync(NAS_PASSWORD_FILE)
+export function clearNasConfigCache(): void {
+  _configCache = null
+  _configCacheTime = 0
+}
+
+function sshCmd(cfg: NasConfig, cmd: string): string {
+  return `sshpass -f ${NAS_PASSWORD_FILE} ssh ${SSH_OPTS} ${cfg.host} "${cmd}"`
+}
+
+function scpFrom(cfg: NasConfig, remote: string, local: string): string {
+  return `sshpass -f ${NAS_PASSWORD_FILE} scp ${SSH_OPTS} ${cfg.host}:${remote} ${local}`
+}
+
+export async function isNasConfigured(): Promise<boolean> {
+  if (!existsSync(NAS_PASSWORD_FILE)) return false
+  const cfg = await getNasConfig()
+  return cfg !== null
 }
 
 // ── Disk usage ──────────────────────────────────────────────────────────────
@@ -36,8 +73,10 @@ export interface NasDiskInfo {
 }
 
 export async function getNasDiskInfo(): Promise<NasDiskInfo | null> {
+  const cfg = await getNasConfig()
+  if (!cfg) return null
   try {
-    const { stdout } = await execAsync(sshCmd(`df -B1 ${NAS_BACKUP_DIR} | tail -1`), { timeout: 10_000 })
+    const { stdout } = await execAsync(sshCmd(cfg, `df -B1 ${cfg.backupDir} | tail -1`), { timeout: 10_000 })
     const parts = stdout.trim().split(/\s+/)
     if (parts.length < 5) return null
     return {
@@ -62,12 +101,14 @@ export interface NasBackupEntry {
 }
 
 export async function listNasBackups(): Promise<NasBackupEntry[]> {
+  const cfg = await getNasConfig()
+  if (!cfg) return []
   const backups: NasBackupEntry[] = []
 
   try {
     // Daily backups
     const { stdout: daily } = await execAsync(
-      sshCmd(`ls -lh ${NAS_BACKUP_DIR}/overpanel-backup-*.tar.gz 2>/dev/null || true`),
+      sshCmd(cfg, `ls -lh ${cfg.backupDir}/overpanel-backup-*.tar.gz 2>/dev/null || true`),
       { timeout: 10_000 }
     )
     for (const line of daily.split('\n').filter(l => l.includes('overpanel-backup-'))) {
@@ -85,7 +126,7 @@ export async function listNasBackups(): Promise<NasBackupEntry[]> {
 
     // System images
     const { stdout: images } = await execAsync(
-      sshCmd(`ls -lh ${NAS_BACKUP_DIR}/system-images/system-image-*.tar.gz 2>/dev/null || true`),
+      sshCmd(cfg, `ls -lh ${cfg.backupDir}/system-images/system-image-*.tar.gz 2>/dev/null || true`),
       { timeout: 10_000 }
     )
     for (const line of images.split('\n').filter(l => l.includes('system-image-'))) {
@@ -118,17 +159,18 @@ function parseSize(s: string): number {
 // ── Download backup from NAS ────────────────────────────────────────────────
 
 export async function downloadNasBackup(filename: string, type: 'daily' | 'system-image'): Promise<string> {
-  // Validate filename to prevent path traversal
   if (filename.includes('/') || filename.includes('..')) {
     throw new Error('Invalid filename')
   }
+  const cfg = await getNasConfig()
+  if (!cfg) throw new Error('NAS not configured')
 
   const remotePath = type === 'system-image'
-    ? `${NAS_BACKUP_DIR}/system-images/${filename}`
-    : `${NAS_BACKUP_DIR}/${filename}`
+    ? `${cfg.backupDir}/system-images/${filename}`
+    : `${cfg.backupDir}/${filename}`
   const localPath = `/tmp/nas-restore-${filename}`
 
-  await execAsync(scpFrom(remotePath, localPath), { timeout: 600_000 })
+  await execAsync(scpFrom(cfg, remotePath, localPath), { timeout: 600_000 })
   return localPath
 }
 
@@ -207,10 +249,12 @@ export async function deleteNasBackup(filename: string, type: 'daily' | 'system-
   if (filename.includes('/') || filename.includes('..')) {
     throw new Error('Invalid filename')
   }
+  const cfg = await getNasConfig()
+  if (!cfg) throw new Error('NAS not configured')
   const remotePath = type === 'system-image'
-    ? `${NAS_BACKUP_DIR}/system-images/${filename}`
-    : `${NAS_BACKUP_DIR}/${filename}`
-  await execAsync(sshCmd(`rm -f ${remotePath}`), { timeout: 10_000 })
+    ? `${cfg.backupDir}/system-images/${filename}`
+    : `${cfg.backupDir}/${filename}`
+  await execAsync(sshCmd(cfg, `rm -f ${remotePath}`), { timeout: 10_000 })
 }
 
 // ── Run backup now ──────────────────────────────────────────────────────────
