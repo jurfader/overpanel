@@ -7,6 +7,8 @@ import { issueSslCert } from '../services/ssl.js'
 import { createSystemUser, deleteSystemUser } from '../services/system-user.js'
 import { findZoneForDomain, createDnsRecord, getPublicIp } from '../services/cloudflare.js'
 import { addDomainToTunnel, removeDomainFromTunnel, isTunnelActive } from '../services/cloudflared.js'
+import { createFtpUser, deleteFtpUser, isFtpAvailable } from '../services/ftp.js'
+import { randomBytes } from 'crypto'
 
 async function getUserCfToken(userId: string): Promise<string | null> {
   const token = await prisma.cloudflareToken.findFirst({
@@ -141,6 +143,33 @@ export async function sitesRoutes(fastify: FastifyInstance) {
           await createSystemUser(domain)
         } catch (userErr) {
           console.warn(`[Site] System user for ${domain} failed (non-fatal):`, userErr)
+        }
+
+        // 1b. Automatyczne konto FTP dla strony
+        if (siteType !== 'overcms' && siteType !== 'openclaw') {
+          try {
+            const ftpAvailable = await isFtpAvailable()
+            if (ftpAvailable) {
+              const ftpUsername = 'ftp' + domain.replace(/[^a-z0-9]/g, '').slice(0, 28)
+              const ftpPassword = randomBytes(12).toString('base64url')
+              const ftpHome = `/var/www/${domain}`
+              // Check if FTP user already exists
+              const existingFtp = await prisma.ftpUser.findFirst({ where: { siteId: site.id } })
+              if (existingFtp) throw new Error('FTP user already exists for this site')
+              await createFtpUser(ftpUsername, ftpPassword, ftpHome)
+              await prisma.ftpUser.create({
+                data: {
+                  username: ftpUsername,
+                  homeDir: ftpHome,
+                  userId: ownerId,
+                  siteId: site.id,
+                },
+              })
+              console.log(`[FTP] Created ${ftpUsername} → ${ftpHome} (password in DB)`)
+            }
+          } catch (ftpErr: any) {
+            console.warn(`[FTP] Auto-create for ${domain} failed (non-fatal):`, ftpErr.message)
+          }
         }
 
         // 2. Nginx vhost — type-aware
@@ -663,6 +692,12 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         if (site.siteType === 'overcms') {
           const { uninstallOverCms } = await import('../services/overcms.js')
           await uninstallOverCms(site.domain).catch((e) => console.warn(`[OverCMS] Uninstall:`, e))
+        }
+        // Delete FTP users for this site
+        const ftpUsers = await prisma.ftpUser.findMany({ where: { siteId: id } })
+        for (const ftp of ftpUsers) {
+          await deleteFtpUser(ftp.username).catch((e) => console.warn(`[FTP] Delete ${ftp.username}:`, e))
+          await prisma.ftpUser.delete({ where: { id: ftp.id } }).catch(() => {})
         }
         await removeDomainFromTunnel(site.domain).catch(() => {})
         await deleteNginxVhost(site.domain)
