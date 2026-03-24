@@ -180,6 +180,10 @@ export default function SettingsPage() {
   const [dropbox, setDropbox] = useState({ dropbox_access_token: '', dropbox_remote_path: '/overpanel-backups' })
   const [savingDropbox, setSavingDropbox] = useState(false)
 
+  // ── NAS state ─────────────────────────────────────────────────────────────
+  const [nas, setNas] = useState({ nas_host: '', nas_user: 'admin', nas_backup_dir: '' })
+  const [savingNas, setSavingNas] = useState(false)
+
   // ── Backup schedule state ──────────────────────────────────────────────────
   const [schedule, setSchedule] = useState({
     backup_schedule: 'disabled', backup_time: '03:00', backup_retention: '7',
@@ -259,6 +263,11 @@ export default function SettingsPage() {
     setDropbox({
       dropbox_access_token: '',
       dropbox_remote_path: settingsData['dropbox_remote_path'] ?? '/overpanel-backups',
+    })
+    setNas({
+      nas_host: settingsData['nas_host'] ?? '',
+      nas_user: settingsData['nas_user'] ?? 'admin',
+      nas_backup_dir: settingsData['nas_backup_dir'] ?? '',
     })
     setSchedule({
       backup_schedule: settingsData['backup_schedule'] ?? 'disabled',
@@ -430,6 +439,19 @@ export default function SettingsPage() {
       showToast('Konfiguracja Dropbox zapisana')
     } catch (err) { showToast(err instanceof ApiError ? err.message : 'Błąd zapisu', 'error') }
     finally { setSavingDropbox(false) }
+  }
+
+  const handleSaveNas = async () => {
+    setSavingNas(true)
+    try {
+      await api.post('/api/settings', {
+        nas_host: nas.nas_host,
+        nas_user: nas.nas_user,
+        nas_backup_dir: nas.nas_backup_dir,
+      })
+      showToast('Konfiguracja NAS zapisana')
+    } catch (err) { showToast(err instanceof ApiError ? err.message : 'Błąd zapisu', 'error') }
+    finally { setSavingNas(false) }
   }
 
   const handleSaveSchedule = async () => {
@@ -946,6 +968,35 @@ export default function SettingsPage() {
               </div>
               <div className="mt-5 flex justify-end">
                 <Button onClick={handleSaveS3} loading={savingS3}><Save className="w-4 h-4" /> Zapisz</Button>
+              </div>
+            </Card>
+
+            {/* ── NAS ──────────────────────────────────────────────────────── */}
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <HardDrive className="w-4.5 h-4.5 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">NAS (SSH)</p>
+                  <p className="text-xs text-[var(--text-muted)]">Codzienny backup na serwer NAS w sieci lokalnej</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label="Adres IP NAS" placeholder="192.168.1.100" value={nas.nas_host}
+                    onChange={(e) => setNas((s) => ({ ...s, nas_host: e.target.value }))} icon={<Server className="w-4 h-4" />} />
+                  <Input label="Użytkownik SSH" placeholder="admin" value={nas.nas_user}
+                    onChange={(e) => setNas((s) => ({ ...s, nas_user: e.target.value }))} />
+                </div>
+                <Input label="Ścieżka backupu na NAS" placeholder="/i-data/volume/BACKUP" value={nas.nas_backup_dir}
+                  onChange={(e) => setNas((s) => ({ ...s, nas_backup_dir: e.target.value }))} />
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  Hasło SSH musi być zapisane w pliku /root/.nas-password na serwerze. Wymaga zainstalowanego sshpass.
+                </p>
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button onClick={handleSaveNas} loading={savingNas}><Save className="w-4 h-4" /> Zapisz</Button>
               </div>
             </Card>
 
