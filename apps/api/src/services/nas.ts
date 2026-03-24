@@ -84,7 +84,7 @@ export async function getNasDiskInfo(): Promise<NasDiskInfo | null> {
       used: parseInt(parts[2] ?? '0'),
       available: parseInt(parts[3] ?? '0'),
       percent: parseInt((parts[4] ?? '0').replace('%', '')),
-      mountPoint: parts[5] ?? NAS_BACKUP_DIR,
+      mountPoint: parts[5] ?? cfg.backupDir,
     }
   } catch {
     return null
