@@ -129,6 +129,25 @@ export async function addDomainToTunnel(domain: string): Promise<void> {
 
     await writeFile(info.configPath, newLines.join('\n'), 'utf-8')
     await reloadTunnel()
+
+    // Utwórz CNAME w Cloudflare DNS przez cloudflared CLI.
+    // Komenda zna tunelID z config.yml lub cert.pem i wywołuje Cloudflare API
+    // żeby utworzyć rekord CNAME `<domain> → <tunnel-id>.cfargotunnel.com`.
+    // Bez tego ruch z Cloudflare Edge nie wiedziałby gdzie skierować żądania.
+    if (info.tunnelName) {
+      try {
+        await run(`cloudflared tunnel route dns ${info.tunnelName} ${domain}`)
+        console.log(`[cloudflared] Created CNAME ${domain} → ${info.tunnelName}.cfargotunnel.com`)
+      } catch (routeErr: any) {
+        // Może już istnieć — to nie jest fatalne
+        const msg = routeErr?.message ?? String(routeErr)
+        if (msg.includes('already exists') || msg.includes('record already')) {
+          console.log(`[cloudflared] CNAME for ${domain} already exists`)
+        } else {
+          console.warn(`[cloudflared] tunnel route dns failed for ${domain}:`, msg)
+        }
+      }
+    }
   } catch (err) {
     console.error('[cloudflared] addDomainToTunnel failed, rolling back:', err)
     await writeFile(info.configPath, content, 'utf-8')

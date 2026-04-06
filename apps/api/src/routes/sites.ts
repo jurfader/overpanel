@@ -339,8 +339,12 @@ export async function sitesRoutes(fastify: FastifyInstance) {
           }
         }
 
-        // 4. Auto-dodaj rekord A w Cloudflare (jeśli token dostępny)
-        if (cfToken) {
+        // 4. Auto-dodaj rekord DNS w Cloudflare (jeśli token dostępny)
+        // Gdy tunel cloudflared jest aktywny, addDomainToTunnel() w kroku 3
+        // już dorobił CNAME przez `cloudflared tunnel route dns`, więc nie
+        // tworzymy rekordu A — to byłoby błędne (A wskazywałby na public IP
+        // serwera, omijając tunel).
+        if (cfToken && !tunnelActive) {
           try {
             const zone = await findZoneForDomain(cfToken, domain)
             if (zone) {
@@ -357,6 +361,8 @@ export async function sitesRoutes(fastify: FastifyInstance) {
           } catch (dnsErr) {
             console.warn(`[DNS] Auto A record failed for ${domain}:`, dnsErr)
           }
+        } else if (tunnelActive) {
+          console.log(`[DNS] Tunnel active — skipping A record (CNAME via cloudflared tunnel route)`)
         }
 
         await prisma.site.update({
