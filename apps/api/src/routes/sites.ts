@@ -340,29 +340,49 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         }
 
         // 4. Auto-dodaj rekord DNS w Cloudflare (jeśli token dostępny)
-        // Gdy tunel cloudflared jest aktywny, addDomainToTunnel() w kroku 3
-        // już dorobił CNAME przez `cloudflared tunnel route dns`, więc nie
-        // tworzymy rekordu A — to byłoby błędne (A wskazywałby na public IP
-        // serwera, omijając tunel).
-        if (cfToken && !tunnelActive) {
+        if (cfToken) {
           try {
             const zone = await findZoneForDomain(cfToken, domain)
             if (zone) {
-              const ip = await getPublicIp()
-              await createDnsRecord(cfToken, zone.id, {
-                type: 'A',
-                name: domain,
-                content: ip,
-                ttl: 1,
-                proxied: true, // pomarańcza domyślnie
-              })
-              console.log(`[DNS] Auto A record: ${domain} → ${ip} (proxied)`)
+              if (tunnelActive) {
+                // Tunel aktywny → CNAME do <tunnel-id>.cfargotunnel.com
+                // (cloudflared CLI wymagałby cert.pem, więc używamy API bezpośrednio)
+                const { getTunnelInfo } = await import('../services/cloudflared.js')
+                const tunnelInfo = await getTunnelInfo()
+                if (tunnelInfo.tunnelId) {
+                  await createDnsRecord(cfToken, zone.id, {
+                    type: 'CNAME',
+                    name: domain,
+                    content: `${tunnelInfo.tunnelId}.cfargotunnel.com`,
+                    ttl: 1,
+                    proxied: true,
+                  })
+                  console.log(`[DNS] CNAME ${domain} → ${tunnelInfo.tunnelId}.cfargotunnel.com (proxied)`)
+                }
+              } else {
+                // Brak tunelu → A record na public IP
+                const ip = await getPublicIp()
+                await createDnsRecord(cfToken, zone.id, {
+                  type: 'A',
+                  name: domain,
+                  content: ip,
+                  ttl: 1,
+                  proxied: true,
+                })
+                console.log(`[DNS] Auto A record: ${domain} → ${ip} (proxied)`)
+              }
+            } else {
+              console.warn(`[DNS] No Cloudflare zone found for ${domain}`)
             }
-          } catch (dnsErr) {
-            console.warn(`[DNS] Auto A record failed for ${domain}:`, dnsErr)
+          } catch (dnsErr: any) {
+            // CNAME już istnieje? OK.
+            const msg = dnsErr?.message ?? String(dnsErr)
+            if (msg.includes('already exists') || msg.includes('record already')) {
+              console.log(`[DNS] Record for ${domain} already exists`)
+            } else {
+              console.warn(`[DNS] Auto record failed for ${domain}:`, msg)
+            }
           }
-        } else if (tunnelActive) {
-          console.log(`[DNS] Tunnel active — skipping A record (CNAME via cloudflared tunnel route)`)
         }
 
         await prisma.site.update({
