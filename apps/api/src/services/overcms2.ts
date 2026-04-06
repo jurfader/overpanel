@@ -253,12 +253,16 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
   })
 
   // 6b. Tytuł witryny (opcjonalnie nadpisz domyślny "OverCMS")
+  // env -u DATABASE_URL: bez tego Bedrock próbuje sparsować DATABASE_URL OVERPANEL-a
+  // (PostgreSQL DSN) i wp-cli wywala "Error establishing a database connection".
   if (siteTitle && siteTitle.trim()) {
     await logStep('Ustawianie tytułu witryny', async () => {
-      // OVERPANEL biegnie jako root → wp-cli wymaga --allow-root
       const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
       await runLong(
-        `cd ${esc(installDir)} && ${wp} option update blogname ${sq(siteTitle)} --path=web/wp`,
+        `cd ${esc(installDir)} && ` +
+        `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST ` +
+        `-u WP_HOME -u WP_SITEURL -u WP_ENV ` +
+        `${wp} option update blogname ${sq(siteTitle)} --path=web/wp`,
         30_000
       )
     })
