@@ -214,19 +214,31 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
     )
   })
 
-  // 5. Utworzenie bazy MySQL
+  // 5. Utworzenie bazy MySQL.
+  // DROP USER + CREATE USER zapewnia że jeśli to retry instalacji, user dostaje
+  // świeże, aktualne hasło (CREATE USER IF NOT EXISTS zostawiało stary hash
+  // i kolejna próba nie mogła się zalogować).
   await logStep('Tworzenie bazy danych MySQL', async () => {
-    const sql = `CREATE DATABASE IF NOT EXISTS \\\`${dbName}\\\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; ` +
-      `CREATE USER IF NOT EXISTS '${dbUser}'@'localhost' IDENTIFIED BY '${dbPass}'; ` +
-      `GRANT ALL PRIVILEGES ON \\\`${dbName}\\\`.* TO '${dbUser}'@'localhost'; ` +
-      `FLUSH PRIVILEGES;`
+    const sql = [
+      `CREATE DATABASE IF NOT EXISTS \\\`${dbName}\\\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+      `DROP USER IF EXISTS '${dbUser}'@'localhost';`,
+      `CREATE USER '${dbUser}'@'localhost' IDENTIFIED BY '${dbPass}';`,
+      `GRANT ALL PRIVILEGES ON \\\`${dbName}\\\`.* TO '${dbUser}'@'localhost';`,
+      `FLUSH PRIVILEGES;`,
+    ].join(' ')
     await runLong(`mysql -e "${sql}"`, 30_000)
   })
 
   // 6. Uruchomienie installer/install.sh
+  // env -u DATABASE_URL: OVERPANEL ma w swoim środowisku DATABASE_URL
+  // (do PostgreSQL/Prismy) i to dziedziczyłoby się do php → Bedrock próbowałby
+  // sparsować ten URL w config/application.php. Wycinamy też resztę WP env vars
+  // żeby Bedrock zawsze czytał świeżo z .env.
   await logStep('Konfiguracja WordPress (installer/install.sh)', async () => {
     const cmd = [
       `cd ${esc(installDir)} &&`,
+      `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST`,
+      `-u WP_HOME -u WP_SITEURL -u WP_ENV`,
       `bash installer/install.sh`,
       `--domain=${sq(domain)}`,
       `--db-name=${sq(dbName)}`,
@@ -243,9 +255,10 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
   // 6b. Tytuł witryny (opcjonalnie nadpisz domyślny "OverCMS")
   if (siteTitle && siteTitle.trim()) {
     await logStep('Ustawianie tytułu witryny', async () => {
+      // OVERPANEL biegnie jako root → wp-cli wymaga --allow-root
+      const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
       await runLong(
-        `cd ${esc(installDir)} && wp option update blogname ${sq(siteTitle)} --path=web/wp 2>/dev/null || ` +
-        `php /tmp/wp-cli.phar option update blogname ${sq(siteTitle)} --path=${esc(installDir)}/web/wp`,
+        `cd ${esc(installDir)} && ${wp} option update blogname ${sq(siteTitle)} --path=web/wp`,
         30_000
       )
     })
