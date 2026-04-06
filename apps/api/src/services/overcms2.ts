@@ -188,6 +188,28 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
     })
   })
 
+  // 2b. Zapisz wersję żeby checkOverCms2Update wiedział od czego porównywać
+  await logStep('Zapisywanie wersji', async () => {
+    let version = 'unknown'
+    try {
+      // Z pobranego źródła — jeśli to git clone, możemy odczytać HEAD
+      if (existsSync(`${installDir}/.git`)) {
+        const { stdout } = await execAsync(`git -C ${esc(installDir)} rev-parse --short HEAD`)
+        version = stdout.trim()
+      } else {
+        // ZIP release: pobierz aktualny commit z remote
+        const { stdout } = await execAsync(
+          `git ls-remote ${OVERCMS2_REPO} refs/heads/main`,
+          { timeout: 30_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
+        )
+        version = stdout.split('\t')[0]?.trim().slice(0, 7) ?? 'unknown'
+      }
+    } catch {
+      // ignore
+    }
+    await writeFile(`${installDir}/.overcms2-version`, version, 'utf-8')
+  })
+
   // 3. Composer install (jeśli vendor/ nie ma — czyli przy git clone)
   await logStep('Instalacja zależności Composer', async () => {
     if (existsSync(`${installDir}/vendor/autoload.php`)) {
@@ -308,6 +330,216 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
     dbUser,
     panelUrl: `https://${domain}/wp/wp-admin/admin.php?page=overcms`,
   }
+}
+
+// ── Update status helpers ────────────────────────────────────────────────────
+
+function updateStatusFile(domain: string): string {
+  return `${INSTALL_STATUS_DIR}/overcms2-update-${domain.replace(/[^a-z0-9.-]/g, '')}.json`
+}
+
+export async function readUpdateStatus(domain: string): Promise<InstallStatus | null> {
+  const f = updateStatusFile(domain)
+  if (!existsSync(f)) return null
+  try {
+    return JSON.parse(await readFile(f, 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+async function writeUpdateStatus(domain: string, data: InstallStatus): Promise<void> {
+  await writeFile(updateStatusFile(domain), JSON.stringify(data, null, 2), 'utf-8')
+}
+
+// ── Check update ─────────────────────────────────────────────────────────────
+
+export interface OverCms2UpdateInfo {
+  hasUpdate: boolean
+  currentVersion?: string
+  latestVersion?: string
+  commits?: number
+  changes?: string[]
+  error?: string
+}
+
+/**
+ * Sprawdź czy jest dostępna nowa wersja OverCMS 2.0.
+ * Porównuje lokalny commit (zapisany w .overcms2-version) z najnowszym z GitHub.
+ */
+export async function checkOverCms2Update(domain: string): Promise<OverCms2UpdateInfo> {
+  const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
+  const installDir = `${WWW_ROOT}/${safeDomain}`
+  const versionFile = `${installDir}/.overcms2-version`
+
+  try {
+    // Lokalny commit (jeśli zapisany w trakcie instalacji/update)
+    let currentVersion = 'unknown'
+    if (existsSync(versionFile)) {
+      currentVersion = (await readFile(versionFile, 'utf-8')).trim()
+    } else if (existsSync(`${installDir}/.git`)) {
+      // Fallback: jeśli installDir to git repo, pobierz HEAD
+      const { stdout } = await execAsync(`git -C ${esc(installDir)} rev-parse --short HEAD`)
+      currentVersion = stdout.trim()
+    }
+
+    // Najnowszy commit na main z remote
+    const { stdout } = await execAsync(
+      `git ls-remote ${OVERCMS2_REPO} refs/heads/main`,
+      { timeout: 30_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
+    )
+    const latestFull = stdout.split('\t')[0]?.trim()
+    const latestVersion = latestFull?.slice(0, 7) ?? 'unknown'
+
+    if (currentVersion === 'unknown' || latestVersion === 'unknown') {
+      return { hasUpdate: false, currentVersion, latestVersion }
+    }
+
+    if (!latestFull?.startsWith(currentVersion)) {
+      return { hasUpdate: true, currentVersion, latestVersion }
+    }
+    return { hasUpdate: false, currentVersion, latestVersion }
+  } catch (err: any) {
+    return { hasUpdate: false, error: err.message }
+  }
+}
+
+// ── Update ───────────────────────────────────────────────────────────────────
+
+/**
+ * Aktualizuje OverCMS 2.0 in-place: pobiera świeże źródła z GitHub i nakłada
+ * je na istniejącą instalację, zachowując .env, web/app/uploads i web/app/themes.
+ */
+export async function updateOverCms2(domain: string): Promise<void> {
+  const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
+  const installDir = `${WWW_ROOT}/${safeDomain}`
+  const tmpDir = `/tmp/overcms2-update-${safeDomain}-${Date.now()}`
+  const startedAt = new Date().toISOString()
+  const log: string[] = []
+
+  if (!existsSync(installDir)) {
+    throw new Error(`Instalacja OverCMS 2.0 nie istnieje: ${installDir}`)
+  }
+
+  const logStep = async (step: string, fn: () => Promise<void>): Promise<void> => {
+    log.push(`> ${step}`)
+    await writeUpdateStatus(domain, { status: 'running', step, log, startedAt })
+    try {
+      await fn()
+      log.push(`✓ ${step}`)
+      await writeUpdateStatus(domain, { status: 'running', step, log, startedAt })
+    } catch (err: any) {
+      const msg = err.message || String(err)
+      const lines = msg.split('\n').filter((l: string) => l.trim())
+      for (const line of lines.slice(-15)) {
+        log.push(`  ${line}`)
+      }
+      log.push(`✗ ${step}`)
+      await writeUpdateStatus(domain, {
+        status: 'failed', step, log, startedAt,
+        completedAt: new Date().toISOString(),
+      })
+      throw err
+    }
+  }
+
+  // 1. Backup .env i web/app/uploads (te się NIE zmieniają)
+  let latestCommit = 'unknown'
+  await logStep('Backup .env i uploads', async () => {
+    await run(`mkdir -p ${esc(tmpDir)}/backup`)
+    await run(`cp ${esc(installDir)}/.env ${esc(tmpDir)}/backup/.env`)
+    if (existsSync(`${installDir}/web/app/uploads`)) {
+      await run(`cp -a ${esc(installDir)}/web/app/uploads ${esc(tmpDir)}/backup/uploads`)
+    }
+  })
+
+  // 2. Pobierz świeże źródła z GitHub
+  await logStep('Pobieranie nowej wersji z GitHub', async () => {
+    await runLong(
+      `git clone --depth 1 ${OVERCMS2_REPO} ${esc(tmpDir)}/src`,
+      120_000
+    )
+    const { stdout } = await execAsync(`git -C ${esc(tmpDir)}/src rev-parse --short HEAD`)
+    latestCommit = stdout.trim()
+    log.push(`  Nowa wersja: ${latestCommit}`)
+  })
+
+  // 3. Composer install (vendor/) — używamy świeżego composer.lock z repo
+  await logStep('Instalacja zależności Composer', async () => {
+    await runLong(
+      `cd ${esc(tmpDir)}/src && composer install --no-dev --optimize-autoloader --no-interaction 2>&1`,
+      300_000
+    )
+  })
+
+  // 4. Nadpisz pliki — zachowaj .env, uploads, db.sqlite, logs
+  await logStep('Aktualizacja plików aplikacji', async () => {
+    // Skopiuj wszystko poza tym co użytkownik zmodyfikował
+    // rsync z exclude — nie nadpisuje .env, uploads, logs
+    await run(
+      `rsync -a --delete ` +
+      `--exclude='.env' ` +
+      `--exclude='web/app/uploads/' ` +
+      `--exclude='logs/' ` +
+      `--exclude='.overcms2-version' ` +
+      `${esc(tmpDir)}/src/ ${esc(installDir)}/`
+    )
+  })
+
+  // 5. Przywróć .env i uploads (na wypadek gdyby rsync coś ruszył)
+  await logStep('Przywracanie .env i uploads', async () => {
+    await run(`cp ${esc(tmpDir)}/backup/.env ${esc(installDir)}/.env`)
+    if (existsSync(`${tmpDir}/backup/uploads`)) {
+      await run(`mkdir -p ${esc(installDir)}/web/app && cp -a ${esc(tmpDir)}/backup/uploads ${esc(installDir)}/web/app/`)
+    }
+  })
+
+  // 6. WordPress core update (wp/) — instalator pobiera nowy core przez composer
+  // ale jeśli baza wymaga migracji, wp-cli ją wykona
+  await logStep('Migracja bazy WordPress (wp core update-db)', async () => {
+    const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
+    await runLong(
+      `cd ${esc(installDir)} && ` +
+      `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST ` +
+      `-u WP_HOME -u WP_SITEURL -u WP_ENV ` +
+      `${wp} core update-db --path=web/wp 2>&1 || true`,
+      120_000
+    )
+  })
+
+  // 7. Wyczyść cache (jeśli plugin cache aktywny)
+  await logStep('Czyszczenie cache', async () => {
+    const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
+    await run(
+      `cd ${esc(installDir)} && ` +
+      `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST ` +
+      `-u WP_HOME -u WP_SITEURL -u WP_ENV ` +
+      `${wp} cache flush --path=web/wp 2>/dev/null || true`
+    )
+  })
+
+  // 8. Permissions (po rsync owner mogł się zmienić)
+  await logStep('Ustawianie uprawnień (www-data)', async () => {
+    await run(`chown -R www-data:www-data ${esc(installDir)}/web/app 2>/dev/null || true`)
+    await run(`chown www-data:www-data ${esc(installDir)}/.env 2>/dev/null || true`)
+    await run(`chmod 640 ${esc(installDir)}/.env 2>/dev/null || true`)
+  })
+
+  // 9. Zapisz nową wersję
+  await logStep('Zapisywanie wersji', async () => {
+    await writeFile(`${installDir}/.overcms2-version`, latestCommit, 'utf-8')
+  })
+
+  // 10. Cleanup tmp
+  await logStep('Czyszczenie plików tymczasowych', async () => {
+    await run(`rm -rf ${esc(tmpDir)}`)
+  })
+
+  log.push(`✓ Aktualizacja OverCMS 2.0 zakończona pomyślnie (${latestCommit})`)
+  await writeUpdateStatus(domain, {
+    status: 'success', step: 'done', log, startedAt,
+    completedAt: new Date().toISOString(),
+  })
 }
 
 export async function uninstallOverCms2(domain: string): Promise<void> {

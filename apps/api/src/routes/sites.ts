@@ -418,16 +418,23 @@ export async function sitesRoutes(fastify: FastifyInstance) {
   fastify.get('/update-status/:domain', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { domain } = request.params as { domain: string }
     const safe = domain.replace(/[^a-z0-9.-]/g, '')
-    const statusFile = `/tmp/overcms-update-${safe}.json`
     const { existsSync } = await import('fs')
     const { readFile } = await import('fs/promises')
-    if (!existsSync(statusFile)) return reply.send({ success: true, data: null })
-    try {
-      const data = JSON.parse(await readFile(statusFile, 'utf-8'))
-      return reply.send({ success: true, data })
-    } catch {
-      return reply.send({ success: true, data: null })
+    // Try overcms2 first, then overcms
+    const candidates = [
+      `/tmp/overcms2-update-${safe}.json`,
+      `/tmp/overcms-update-${safe}.json`,
+    ]
+    for (const f of candidates) {
+      if (existsSync(f)) {
+        try {
+          return reply.send({ success: true, data: JSON.parse(await readFile(f, 'utf-8')) })
+        } catch {
+          // try next
+        }
+      }
     }
+    return reply.send({ success: true, data: null })
   })
 
   // GET /api/sites/:id/check-update — sprawdź dostępność aktualizacji CMS
@@ -481,6 +488,17 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       }
     }
 
+    if (site.siteType === 'overcms2') {
+      try {
+        const { checkOverCms2Update } = await import('../services/overcms2.js')
+        const info = await checkOverCms2Update(site.domain)
+        return reply.send({ success: true, data: { ...info, type: 'overcms2' } })
+      } catch (err: any) {
+        console.warn(`[OverCMS2] check-update failed for ${site.domain}:`, err.message)
+        return reply.send({ success: true, data: { hasUpdate: false, type: 'overcms2', error: err.message } })
+      }
+    }
+
     return reply.send({ success: true, data: { hasUpdate: false, type: null } })
   })
 
@@ -513,6 +531,20 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       } catch (err: any) {
         return reply.code(500).send({ success: false, error: err.message })
       }
+    }
+
+    if (site.siteType === 'overcms2') {
+      reply.code(202).send({ success: true, data: { message: 'Aktualizacja OverCMS 2.0 w toku...' } })
+      setImmediate(async () => {
+        try {
+          const { updateOverCms2 } = await import('../services/overcms2.js')
+          await updateOverCms2(site.domain)
+          console.log(`[OverCMS2] Updated ${site.domain}`)
+        } catch (err: any) {
+          console.error(`[OverCMS2] Update failed for ${site.domain}:`, err.message)
+        }
+      })
+      return
     }
 
     if (site.siteType === 'overcms') {
