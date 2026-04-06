@@ -277,8 +277,19 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
     await run(`chown -R www-data:www-data ${esc(installDir)}/web/app 2>/dev/null || true`)
     await run(`chown www-data:www-data ${esc(installDir)}/.env 2>/dev/null || true`)
     await run(`chmod 640 ${esc(installDir)}/.env 2>/dev/null || true`)
-    // FS_METHOD=direct: bez tego WP próbuje SSH/FTP do zapisu → "FTP hostname is required"
-    await run(`grep -q '^FS_METHOD=' ${esc(installDir)}/.env || echo "FS_METHOD='direct'" >> ${esc(installDir)}/.env`)
+  })
+
+  // 7b. Deaktywuj cache-enabler — wymaga FS_METHOD jako PHP define, nie env var.
+  // Z aktywnym cache-enablerem każdy request rzuca "FTP hostname is required".
+  // Klient może go włączyć ręcznie po skonfigurowaniu FS_METHOD w wp-config.
+  await logStep('Dezaktywacja cache-enabler (wymaga FS_METHOD)', async () => {
+    const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
+    await run(
+      `cd ${esc(installDir)} && ` +
+      `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST ` +
+      `-u WP_HOME -u WP_SITEURL -u WP_ENV ` +
+      `${wp} plugin deactivate cache-enabler --path=web/wp 2>/dev/null || true`
+    )
   })
 
   log.push(`✓ Instalacja OverCMS 2.0 zakończona pomyślnie (źródło: ${usedSource})`)
