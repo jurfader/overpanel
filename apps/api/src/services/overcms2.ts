@@ -269,8 +269,11 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
   }
 
   // 7. Permissions
+  // .env musi być czytelny przez www-data (PHP-FPM), inaczej Bedrock rzuca
+  // Dotenv\Exception\InvalidPathException → 500 na każdym requeście.
   await logStep('Ustawianie uprawnień plików (www-data)', async () => {
     await run(`chown -R www-data:www-data ${esc(installDir)}/web/app/uploads ${esc(installDir)}/web/app/mu-plugins/overcms-core 2>/dev/null || true`)
+    await run(`chown www-data:www-data ${esc(installDir)}/.env 2>/dev/null || true`)
     await run(`chmod 640 ${esc(installDir)}/.env 2>/dev/null || true`)
   })
 
