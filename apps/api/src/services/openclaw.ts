@@ -8,6 +8,7 @@
 import { run } from './shell.js'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { randomBytes } from 'crypto'
 import { writeFile, readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 
@@ -117,38 +118,54 @@ export async function installOpenClaw(options: OpenClawInstallOptions): Promise<
   })
 
   // 2. Generate OpenClaw config (openclaw.json)
+  const gatewayToken = randomBytes(24).toString('base64url')
   await logStep('Generowanie konfiguracji OpenClaw', async () => {
-    const config: Record<string, unknown> = {}
-
-    if (openaiApiKey) config.openaiApiKey = openaiApiKey
-    if (anthropicApiKey) config.anthropicApiKey = anthropicApiKey
+    const config: Record<string, unknown> = {
+      gateway: {
+        port: 18789,
+        mode: 'local',
+        trustedProxies: ['0.0.0.0/0'],
+        controlUi: {
+          allowedOrigins: [`https://${domain}`],
+          dangerouslyDisableDeviceAuth: true,
+        },
+        auth: { token: gatewayToken },
+      },
+      session: {
+        sendPolicy: { default: 'allow' },
+      },
+      meta: {
+        lastTouchedVersion: '2026.3.28',
+        lastTouchedAt: new Date().toISOString(),
+      },
+    }
 
     // Messaging channels
-    if (telegramToken) config.telegram = { botToken: telegramToken }
-    if (discordToken) config.discord = { botToken: discordToken }
-    if (slackToken) config.slack = { botToken: slackToken }
-
-    // Gateway settings
-    config.gateway = { port: 18789 }
+    const channels: Record<string, unknown> = {}
+    if (telegramToken) channels.telegram = { botToken: telegramToken, dmPolicy: 'open' }
+    if (discordToken) channels.discord = { botToken: discordToken, dmPolicy: 'open' }
+    if (slackToken) channels.slack = { botToken: slackToken, dmPolicy: 'open' }
+    if (Object.keys(channels).length > 0) config.channels = channels
 
     await writeFile(`${installDir}/config/openclaw.json`, JSON.stringify(config, null, 2), 'utf-8')
   })
 
-  // 3. Generate docker-compose.yml
+  // 3. Generate docker-compose.yml — host network + API keys as env vars
+  const envVars = [`      - OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`]
+  if (openaiApiKey) envVars.push(`      - OPENAI_API_KEY=${openaiApiKey}`)
+  if (anthropicApiKey) envVars.push(`      - ANTHROPIC_API_KEY=${anthropicApiKey}`)
+
   const composeContent = `
 services:
   openclaw-gateway:
     container_name: openclaw-gw-${containerPrefix}
     image: node:22-alpine
-    working_dir: /app
-    command: ["sh", "-c", "npm i -g openclaw && openclaw gateway --config /root/.openclaw/openclaw.json"]
-    ports:
-      - "${gatewayPort}:18789"
-      - "${dashboardPort}:18790"
+    network_mode: host
+    command: ["sh", "-c", "npm i -g openclaw && openclaw gateway"]
     volumes:
       - ./config:/root/.openclaw
     environment:
-      - OPENCLAW_GATEWAY_TOKEN=${containerPrefix}
+${envVars.join('\n')}
     restart: unless-stopped
 `.trim()
 

@@ -9,7 +9,7 @@ import { Globe, Lock, ArrowLeft, X, Loader2, CheckCircle2, AlertCircle } from 'l
 
 // ── Site types ─────────────────────────────────────────────────────────────────
 
-type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy' | 'overcms' | 'openclaw'
+type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy' | 'overcms' | 'overcms2' | 'openclaw'
 
 interface SiteTypeOption {
   id: SiteType
@@ -85,6 +85,25 @@ const SITE_TYPES: SiteTypeOption[] = [
         <circle cx="16" cy="16" r="14" fill="#E91E8C" opacity="0.15" />
         <circle cx="16" cy="16" r="14" stroke="#E91E8C" strokeWidth="1.5" opacity="0.4" />
         <text x="16" y="21" textAnchor="middle" fill="#E91E8C" fontSize="8" fontWeight="800" fontFamily="monospace">CMS</text>
+      </svg>
+    ),
+  },
+  {
+    id: 'overcms2',
+    label: 'OverCMS 2.0',
+    description: 'WordPress + React panel — natywny LAMP',
+    available: true,
+    accent: '#E91E8C',
+    icon: (
+      <svg viewBox="0 0 32 32" fill="none" className="w-10 h-10">
+        <defs>
+          <linearGradient id="overcms2-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#E91E8C" />
+            <stop offset="1" stopColor="#9333EA" />
+          </linearGradient>
+        </defs>
+        <rect x="3" y="3" width="26" height="26" rx="6" fill="url(#overcms2-grad)" fillOpacity="0.15" stroke="url(#overcms2-grad)" strokeWidth="1.5" strokeOpacity="0.6" />
+        <text x="16" y="20" textAnchor="middle" fill="#E91E8C" fontSize="8" fontWeight="800" fontFamily="system-ui">2.0</text>
       </svg>
     ),
   },
@@ -169,6 +188,12 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   const [cmsAdminEmail, setCmsAdminEmail] = useState('')
   const [cmsAdminPassword, setCmsAdminPassword] = useState('')
 
+  // OverCMS 2.0-specific
+  const [cms2AdminUser, setCms2AdminUser] = useState('admin')
+  const [cms2AdminEmail, setCms2AdminEmail] = useState('')
+  const [cms2AdminPassword, setCms2AdminPassword] = useState('')
+  const [cms2SiteTitle, setCms2SiteTitle] = useState('')
+
   // OpenClaw-specific
   const [openaiKey, setOpenaiKey] = useState('')
   const [anthropicKey, setAnthropicKey] = useState('')
@@ -248,6 +273,10 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
       setWpAdmin('')
       setWpEmail('')
       setWpPassword('')
+      setCms2AdminUser('admin')
+      setCms2AdminEmail('')
+      setCms2AdminPassword('')
+      setCms2SiteTitle('')
       setInstallLog([])
       setInstallStatus('running')
       setInstallStep('')
@@ -300,6 +329,20 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
         setLoading(false)
         startPolling(domain)
         return
+      } else if (siteType === 'overcms2') {
+        await api.post('/api/sites', {
+          domain,
+          siteType: 'overcms2',
+          enableSsl,
+          phpVersion: '8.3',
+          adminUser: cms2AdminUser,
+          adminEmail: cms2AdminEmail,
+          adminPassword: cms2AdminPassword,
+          siteTitle: cms2SiteTitle || undefined,
+        })
+        setLoading(false)
+        startPolling(domain)
+        return
       } else if (siteType === 'openclaw') {
         await api.post('/api/sites', {
           domain,
@@ -342,6 +385,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
 
   const isWordPress = siteType === 'wordpress'
   const isOverCms = siteType === 'overcms'
+  const isOverCms2 = siteType === 'overcms2'
   const isOpenClaw = siteType === 'openclaw'
   const isStatic = siteType === 'static'
   const isNodeJs = siteType === 'nodejs'
@@ -370,7 +414,11 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
             )}
             <div>
               <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                {step === 'type' ? 'Nowa strona WWW' : step === 'installing' ? 'Instalacja OverCMS' : `Strona ${SITE_TYPES.find(t => t.id === siteType)?.label}`}
+                {step === 'type'
+                  ? 'Nowa strona WWW'
+                  : step === 'installing'
+                    ? `Instalacja ${SITE_TYPES.find(t => t.id === siteType)?.label ?? ''}`
+                    : `Strona ${SITE_TYPES.find(t => t.id === siteType)?.label}`}
               </h2>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 {step === 'type' ? 'Wybierz typ środowiska' : step === 'installing' ? domain : 'Skonfiguruj domenę i parametry'}
@@ -427,8 +475,14 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                 <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20">
                   <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-green-400">OverCMS zainstalowany pomyślnie!</p>
-                    <p className="text-xs text-green-400/70 mt-0.5">Panel admina dostępny pod adresem <code className="text-green-300">https://{domain}</code></p>
+                    <p className="text-sm font-medium text-green-400">
+                      {SITE_TYPES.find(t => t.id === siteType)?.label ?? 'Instalacja'} zakończona pomyślnie!
+                    </p>
+                    <p className="text-xs text-green-400/70 mt-0.5">
+                      {siteType === 'overcms2'
+                        ? <>Panel admina: <code className="text-green-300">https://{domain}/wp/wp-admin/</code></>
+                        : <>Adres: <code className="text-green-300">https://{domain}</code></>}
+                    </p>
                   </div>
                 </div>
               )}
@@ -605,6 +659,50 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                   </>
                 )}
 
+                {/* OverCMS 2.0 fields */}
+                {isOverCms2 && (
+                  <>
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">OverCMS 2.0 (WordPress + React)</p>
+                      <div className="space-y-3">
+                        <FieldInput
+                          label="Tytuł strony"
+                          value={cms2SiteTitle}
+                          onChange={setCms2SiteTitle}
+                          placeholder="Moja strona OverCMS"
+                          hint="Domyślnie: OverCMS — można zmienić później w panelu"
+                        />
+                        <FieldInput
+                          label="Login administratora"
+                          value={cms2AdminUser}
+                          onChange={setCms2AdminUser}
+                          placeholder="admin"
+                          required
+                        />
+                        <FieldInput
+                          label="E-mail administratora"
+                          value={cms2AdminEmail}
+                          onChange={setCms2AdminEmail}
+                          placeholder="admin@example.com"
+                          type="email"
+                          required
+                        />
+                        <FieldInput
+                          label="Hasło administratora"
+                          value={cms2AdminPassword}
+                          onChange={setCms2AdminPassword}
+                          placeholder="Min. 8 znaków"
+                          type="password"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      Instalator pobierze najnowszy release z GitHub, utworzy bazę MySQL, skonfiguruje WordPress (Bedrock) i włączy panel React pod adresem <code className="text-[var(--text-secondary)]">/wp/wp-admin/</code>.
+                    </p>
+                  </>
+                )}
+
                 {/* OpenClaw fields */}
                 {isOpenClaw && (
                   <>
@@ -655,7 +753,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                 )}
 
                 {/* SSL toggle — not for WP (always on) */}
-                {!isWordPress && !isOverCms && !isOpenClaw && (
+                {!isWordPress && !isOverCms && !isOverCms2 && !isOpenClaw && (
                   <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">

@@ -37,7 +37,7 @@ export interface AuthResponse {
 export type SiteStatus = 'active' | 'inactive' | 'pending'
 export type PhpVersion = '7.4' | '8.0' | '8.1' | '8.2' | '8.3'
 
-export type SiteType = 'php' | 'nodejs' | 'python' | 'proxy' | 'static' | 'overcms' | 'openclaw'
+export type SiteType = 'php' | 'nodejs' | 'python' | 'proxy' | 'static' | 'overcms' | 'overcms2' | 'openclaw'
 
 export interface Site {
   id: string

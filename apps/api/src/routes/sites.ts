@@ -20,9 +20,11 @@ async function getUserCfToken(userId: string): Promise<string | null> {
 
 const createSiteSchema = z.object({
   domain: z.string().min(3).regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain'),
-  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms', 'openclaw']).default('php'),
+  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms', 'overcms2', 'openclaw']).default('php'),
+  adminUser: z.string().regex(/^[A-Za-z0-9_.@-]+$/).optional(),
   adminEmail: z.string().email().optional(),
   adminPassword: z.string().optional(),
+  siteTitle: z.string().max(200).optional(),
   licenseKey: z.string().optional(),
   phpVersion: z.enum(['7.4', '8.0', '8.1', '8.2', '8.3']).default('8.3'),
   appPort: z.number().int().min(1024).max(65535).optional(),
@@ -112,6 +114,16 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ success: false, error: 'Wymagany jest klucz API OpenAI lub Anthropic do instalacji OpenClaw' })
     }
 
+    // OverCMS 2.0 wymaga email + hasło admina
+    if (siteType === 'overcms2') {
+      if (!body.data.adminEmail?.trim()) {
+        return reply.code(400).send({ success: false, error: 'Email administratora jest wymagany dla OverCMS 2.0' })
+      }
+      if (!body.data.adminPassword || body.data.adminPassword.length < 8) {
+        return reply.code(400).send({ success: false, error: 'Hasło administratora (min. 8 znaków) jest wymagane dla OverCMS 2.0' })
+      }
+    }
+
     // Klient może tworzyć tylko dla siebie
     const ownerId = caller.role === 'admin' && userId ? userId : caller.id
 
@@ -119,7 +131,9 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     const exists = await prisma.site.findUnique({ where: { domain } })
     if (exists) return reply.code(409).send({ success: false, error: 'Domain already exists' })
 
-    const documentRoot = `/var/www/${domain}/public`
+    const documentRoot = siteType === 'overcms2'
+      ? `/var/www/${domain}/web`
+      : `/var/www/${domain}/public`
 
     // Stwórz rekord w DB
     const site = await prisma.site.create({
@@ -173,8 +187,8 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         }
 
         // 2. Nginx vhost — type-aware
-        if (siteType === 'overcms' || siteType === 'openclaw') {
-          // Docker-based apps get their own nginx proxy after containers are up
+        if (siteType === 'overcms' || siteType === 'openclaw' || siteType === 'overcms2') {
+          // Apps z własnym vhostem dostają go dopiero po pomyślnej instalacji
         } else if (siteType === 'nodejs' || siteType === 'python' || siteType === 'proxy') {
           const port = appPort ?? 3000
           await createNginxNodeProxy({ domain, appPort: port })
@@ -182,7 +196,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
           // php, static — use standard PHP-FPM vhost (static ignores PHP blocks but that's harmless)
           await createNginxVhost({ domain, documentRoot, phpVersion })
         }
-        if (siteType !== 'overcms' && siteType !== 'openclaw') {
+        if (siteType !== 'overcms' && siteType !== 'openclaw' && siteType !== 'overcms2') {
           await reloadNginx()
         }
 
@@ -231,6 +245,45 @@ export async function sitesRoutes(fastify: FastifyInstance) {
             overcmsOk = false
             console.error(`[OverCMS] Install failed for ${domain}:`, err.message)
             // Don't proceed with tunnel/DNS — no nginx vhost exists
+            await prisma.site.update({ where: { id: site.id }, data: { status: 'inactive' } })
+            return
+          }
+        }
+
+        // 2b2. OverCMS 2.0 (Bedrock/WordPress) installation
+        if (siteType === 'overcms2') {
+          try {
+            const { installOverCms2 } = await import('../services/overcms2.js')
+            const { createNginxOverCms2Vhost } = await import('../services/nginx.js')
+            const result = await installOverCms2({
+              domain,
+              adminUser: body.data.adminUser || 'admin',
+              adminEmail: body.data.adminEmail || caller.email || `admin@${domain}`,
+              adminPassword: body.data.adminPassword!,
+              siteTitle: body.data.siteTitle,
+            })
+            await createNginxOverCms2Vhost({ domain, installDir: result.installDir, phpVersion })
+            await reloadNginx()
+            console.log(`[OverCMS2] Installed for ${domain}: ${result.panelUrl}`)
+
+            // Zarejestruj bazę MySQL w panelu
+            try {
+              await prisma.database.create({
+                data: {
+                  name: result.dbName,
+                  engine: 'mysql',
+                  dbUser: result.dbUser,
+                  host: 'localhost',
+                  port: 3306,
+                  userId: ownerId,
+                  siteId: site.id,
+                },
+              })
+            } catch (dbErr: any) {
+              console.warn(`[OverCMS2] Failed to register MySQL DB:`, dbErr.message)
+            }
+          } catch (err: any) {
+            console.error(`[OverCMS2] Install failed for ${domain}:`, err.message)
             await prisma.site.update({ where: { id: site.id }, data: { status: 'inactive' } })
             return
           }
@@ -323,13 +376,15 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     return reply.code(201).send({ success: true, data: site })
   })
 
-  // GET /api/sites/install-status/:domain — live install progress (OverCMS + OpenClaw)
+  // GET /api/sites/install-status/:domain — live install progress (OverCMS, OverCMS 2.0, OpenClaw)
   fastify.get('/install-status/:domain', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { domain } = request.params as { domain: string }
-    // Try OverCMS first, then OpenClaw
     const { readInstallStatus: readOverCms } = await import('../services/overcms.js')
+    const { readInstallStatus: readOverCms2 } = await import('../services/overcms2.js')
     const { readInstallStatus: readOpenClaw } = await import('../services/openclaw.js')
-    const data = await readOverCms(domain) ?? await readOpenClaw(domain)
+    const data = (await readOverCms2(domain))
+      ?? (await readOverCms(domain))
+      ?? (await readOpenClaw(domain))
     return reply.send({ success: true, data })
   })
 
