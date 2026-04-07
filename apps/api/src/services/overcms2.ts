@@ -481,29 +481,36 @@ export async function checkOverCms2Update(domain: string): Promise<OverCms2Updat
   const versionFile = `${installDir}/.overcms2-version`
 
   try {
-    // Lokalny commit (jeśli zapisany w trakcie instalacji/update)
-    let currentVersion = 'unknown'
+    // Najnowszy commit na main z remote
+    const { stdout: remoteOut } = await execAsync(
+      `git ls-remote ${OVERCMS2_REPO} refs/heads/main`,
+      { timeout: 30_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
+    )
+    const latestFull = remoteOut.split('\t')[0]?.trim()
+    const latestVersion = latestFull?.slice(0, 7) ?? 'unknown'
+
+    if (latestVersion === 'unknown') {
+      return { hasUpdate: false, currentVersion: 'unknown', latestVersion: 'unknown' }
+    }
+
+    // Lokalny commit
+    let currentVersion: string | null = null
     if (existsSync(versionFile)) {
       currentVersion = (await readFile(versionFile, 'utf-8')).trim()
     } else if (existsSync(`${installDir}/.git`)) {
-      // Fallback: jeśli installDir to git repo, pobierz HEAD
       const { stdout } = await execAsync(`git -C ${esc(installDir)} rev-parse --short HEAD`)
       currentVersion = stdout.trim()
     }
 
-    // Najnowszy commit na main z remote
-    const { stdout } = await execAsync(
-      `git ls-remote ${OVERCMS2_REPO} refs/heads/main`,
-      { timeout: 30_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
-    )
-    const latestFull = stdout.split('\t')[0]?.trim()
-    const latestVersion = latestFull?.slice(0, 7) ?? 'unknown'
-
-    if (currentVersion === 'unknown' || latestVersion === 'unknown') {
-      return { hasUpdate: false, currentVersion, latestVersion }
+    // Stara instalacja bez .overcms2-version i bez .git → załóż że jest update dostępny
+    // (klient może bezpiecznie zaktualizować, updateOverCms2 zachowa .env i uploads)
+    if (!currentVersion) {
+      // Zapisz placeholder żeby pokazać się w UI że potrzebny update
+      await writeFile(versionFile, 'legacy', 'utf-8').catch(() => {})
+      return { hasUpdate: true, currentVersion: 'legacy', latestVersion }
     }
 
-    if (!latestFull?.startsWith(currentVersion)) {
+    if (currentVersion === 'legacy' || !latestFull?.startsWith(currentVersion)) {
       return { hasUpdate: true, currentVersion, latestVersion }
     }
     return { hasUpdate: false, currentVersion, latestVersion }

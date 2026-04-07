@@ -126,7 +126,7 @@ function PhpSettingsModal({ siteId, siteDomain, onClose }: { siteId: string; sit
 
 interface UpdateInfo {
   hasUpdate: boolean
-  type: 'wordpress' | 'overcms' | null
+  type: 'wordpress' | 'overcms' | 'overcms2' | null
   currentVersion?: string
   latestVersion?: string
   commits?: number
@@ -289,7 +289,9 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
               <ArrowUpCircle className="w-3 h-3" />
               {updateInfo.type === 'wordpress'
                 ? `WP ${updateInfo.latestVersion}`
-                : `${updateInfo.commits} zmian`}
+                : updateInfo.type === 'overcms2'
+                ? `OverCMS 2.0 ${updateInfo.latestVersion ?? ''}`
+                : `${updateInfo.commits ?? ''} zmian`}
             </Badge>
           )}
         </div>
