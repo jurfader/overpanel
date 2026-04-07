@@ -71,6 +71,7 @@ export interface OverCms2InstallOptions {
   adminEmail: string
   adminPassword: string
   siteTitle?: string
+  licenseKey?: string   // jeśli podany, OVERPANEL aktywuje licencję i pobiera Divi
 }
 
 export interface OverCms2InstallResult {
@@ -92,8 +93,10 @@ export interface OverCms2InstallResult {
  *  7. Permissions (www-data)
  */
 export async function installOverCms2(options: OverCms2InstallOptions): Promise<OverCms2InstallResult> {
-  const { domain, adminUser, adminEmail, adminPassword, siteTitle } = options
+  const { domain, adminUser, adminEmail, adminPassword, siteTitle, licenseKey } = options
   const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
+  const installationId = randomBytes(16).toString('hex')
+  const licenseServerUrl = process.env['OVERCMS_LICENSE_SERVER_URL'] ?? 'http://51.38.137.199:3002'
 
   if (!safeDomain || safeDomain !== domain) {
     throw new Error(`Niepoprawna domena: ${domain}`)
@@ -288,6 +291,111 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
         30_000
       )
     })
+  }
+
+  // 6c. Aktywacja licencji OverCMS + pobranie i instalacja motywu Divi
+  //
+  // Flow:
+  //   1. POST {licenseServer}/activate          — rejestruje domenę pod kluczem
+  //   2. POST {licenseServer}/themes/divi/download
+  //      → streamuje Divi.zip + zwraca w nagłówkach kredencjały Elegant Themes
+  //        (X-OverCMS-License-Username, X-OverCMS-License-Key)
+  //   3. unzip do web/app/themes/, aktywacja przez wp-cli
+  //   4. zapis kredencjałów ET do wp_option et_automatic_updates_options
+  //
+  // Bez licenseKey ten krok jest pomijany — klient może później wpisać klucz
+  // w panelu Ustawienia i pobrać Divi ręcznie.
+
+  if (licenseKey?.trim()) {
+    await logStep('Aktywacja licencji OverCMS', async () => {
+      const res = await fetch(`${licenseServerUrl}/activate`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ licenseKey: licenseKey.trim(), domain, installationId }),
+      })
+      if (!res.ok) {
+        const err = await res.text().catch(() => '')
+        throw new Error(`License activation failed (${res.status}): ${err.slice(0, 200)}`)
+      }
+      const data = await res.json() as { success?: boolean; plan?: string }
+      log.push(`  Plan: ${data.plan ?? 'unknown'}`)
+    }).catch((err: any) => {
+      // Niefatalny — kontynuuj instalację bez Divi
+      log.push(`  ⚠ Aktywacja licencji nieudana (non-fatal): ${err?.message?.slice(0, 200) ?? 'unknown'}`)
+      log.push(`  Instalacja kontynuuje bez Divi. Klient może wpisać klucz w Ustawieniach panelu.`)
+    })
+
+    // Pobranie i instalacja Divi (tylko jeśli aktywacja nie wywaliła się fatalnie)
+    const lastStatus = await readInstallStatus(domain)
+    const lastLogLine = lastStatus?.log?.[lastStatus.log.length - 1] ?? ''
+    if (!lastLogLine.includes('⚠ Aktywacja licencji nieudana')) {
+      await logStep('Pobieranie i instalacja motywu Divi', async () => {
+        const res = await fetch(`${licenseServerUrl}/themes/divi/download`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ licenseKey: licenseKey.trim(), domain, installationId }),
+        })
+        if (!res.ok) {
+          const err = await res.text().catch(() => '')
+          throw new Error(`Divi download failed (${res.status}): ${err.slice(0, 200)}`)
+        }
+
+        // Wyciągnij kredencjały ET z nagłówków
+        const etUsername = res.headers.get('x-overcms-license-username')
+        const etApiKey   = res.headers.get('x-overcms-license-key')
+
+        // Zapisz binarny .zip
+        const tmpZip = `/tmp/divi-${safeDomain}-${Date.now()}.zip`
+        const buf = Buffer.from(await res.arrayBuffer())
+        await writeFile(tmpZip, buf)
+
+        // Rozpakuj do themes/
+        await runLong(
+          `unzip -q -o ${esc(tmpZip)} -d ${esc(installDir)}/web/app/themes/`,
+          120_000
+        )
+        await run(`rm -f ${esc(tmpZip)}`)
+
+        // Aktywuj motyw przez wp-cli
+        const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
+        const wpEnv =
+          `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST ` +
+          `-u WP_HOME -u WP_SITEURL -u WP_ENV `
+        await runLong(
+          `cd ${esc(installDir)} && ${wpEnv}${wp} theme activate Divi --path=web/wp`,
+          60_000
+        )
+
+        // Wstrzyknij ET credentials do wp_option (Divi czyta z 'et_automatic_updates_options')
+        if (etUsername && etApiKey) {
+          const phpSerialize = (u: string, k: string): string =>
+            `a:2:{s:8:"username";s:${u.length}:"${u}";s:7:"api_key";s:${k.length}:"${k}";}`
+          const serialized = phpSerialize(etUsername, etApiKey)
+          await runLong(
+            `cd ${esc(installDir)} && ${wpEnv}${wp} option update et_automatic_updates_options ${sq(serialized)} --format=plaintext --path=web/wp`,
+            30_000
+          )
+          log.push(`  Kredencjały Elegant Themes zapisane (auto-update aktywny)`)
+        }
+      }).catch((err: any) => {
+        log.push(`  ⚠ Instalacja Divi nieudana (non-fatal): ${err?.message?.slice(0, 200) ?? 'unknown'}`)
+        log.push(`  Klient może spróbować ponownie przez panel: Moduły → Wgraj motyw`)
+      })
+    }
+
+    // Zapisz klucz licencyjny w .env instalacji żeby OverCMS Updater
+    // mógł później sprawdzać licencję sam (24h heartbeat).
+    await logStep('Zapisywanie klucza licencji w .env', async () => {
+      const envAppend =
+        `\n# OverCMS licensing\n` +
+        `OVERCMS_LICENSE_KEY='${licenseKey.trim()}'\n` +
+        `OVERCMS_INSTALL_ID='${installationId}'\n` +
+        `LICENSE_SERVER_URL='${licenseServerUrl}'\n`
+      await run(`echo ${sq(envAppend)} >> ${esc(installDir)}/.env`)
+    })
+  } else {
+    log.push(`  ℹ Brak klucza licencyjnego — Divi nie zostanie zainstalowane.`)
+    log.push(`  Klient może wpisać klucz w panelu (Ustawienia → Licencja) żeby pobrać Divi później.`)
   }
 
   // 7. Permissions

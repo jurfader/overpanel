@@ -193,6 +193,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   const [cms2AdminEmail, setCms2AdminEmail] = useState('')
   const [cms2AdminPassword, setCms2AdminPassword] = useState('')
   const [cms2SiteTitle, setCms2SiteTitle] = useState('')
+  const [cms2LicenseKey, setCms2LicenseKey] = useState('')
 
   // OpenClaw-specific
   const [openaiKey, setOpenaiKey] = useState('')
@@ -277,6 +278,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
       setCms2AdminEmail('')
       setCms2AdminPassword('')
       setCms2SiteTitle('')
+      setCms2LicenseKey('')
       setInstallLog([])
       setInstallStatus('running')
       setInstallStep('')
@@ -339,6 +341,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
           adminEmail: cms2AdminEmail,
           adminPassword: cms2AdminPassword,
           siteTitle: cms2SiteTitle || undefined,
+          licenseKey: cms2LicenseKey || undefined,
         })
         setLoading(false)
         startPolling(domain)
@@ -697,6 +700,20 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                         />
                       </div>
                     </div>
+
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">Licencja OverCMS (opcjonalnie)</p>
+                      <div className="space-y-3">
+                        <FieldInput
+                          label="Klucz licencyjny"
+                          value={cms2LicenseKey}
+                          onChange={setCms2LicenseKey}
+                          placeholder="XXXX-XXXX-XXXX-XXXX"
+                          hint="Z kluczem licencyjnym instalator automatycznie pobierze i aktywuje motyw Divi z serwera licencji."
+                        />
+                      </div>
+                    </div>
+
                     <p className="text-[10px] text-[var(--text-muted)]">
                       Instalator pobierze najnowszy release z GitHub, utworzy bazę MySQL, skonfiguruje WordPress (Bedrock) i włączy panel React pod adresem <code className="text-[var(--text-secondary)]">/wp/wp-admin/</code>.
                     </p>

@@ -87,8 +87,8 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ success: false, error: 'Klucz licencyjny jest wymagany do instalacji OverCMS' })
     }
 
-    // Walidacja klucza licencyjnego na serwerze licencji przed instalacją
-    if (siteType === 'overcms' && body.data.licenseKey) {
+    // Walidacja klucza licencyjnego (overcms wymaga, overcms2 jeśli podany — opcjonalny dla Divi)
+    if ((siteType === 'overcms' || siteType === 'overcms2') && body.data.licenseKey?.trim()) {
       const licServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://51.38.137.199:3002'
       try {
         const licRes = await fetch(`${licServerUrl}/customer/${encodeURIComponent(body.data.licenseKey.trim())}`)
@@ -261,6 +261,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
               adminEmail: body.data.adminEmail || caller.email || `admin@${domain}`,
               adminPassword: body.data.adminPassword!,
               siteTitle: body.data.siteTitle,
+              licenseKey: body.data.licenseKey,
             })
             await createNginxOverCms2Vhost({ domain, installDir: result.installDir, phpVersion })
             await reloadNginx()
