@@ -305,7 +305,7 @@ server {
     # Hardening — ukryj pliki dotfiles. Bedrock trzyma vendor/ i config/
     # POZA document_root (/var/www/{domain}/web), więc nie wystawiamy do nich
     # specjalnych deny — sa fizycznie niedostepne. NIE mozemy uzywac
-    # `location ~ /vendor/` bo to regex bez kotwicy i pasowalby do
+    # 'location ~ /vendor/' bo to regex bez kotwicy i pasowalby do
     # /wp/wp-includes/js/dist/vendor/react.min.js, blokujac wp-admin.
     location ~ /\\.(env|git|ht) { deny all; }
 
