@@ -309,6 +309,17 @@ server {
     # /wp/wp-includes/js/dist/vendor/react.min.js, blokujac wp-admin.
     location ~ /\\.(env|git|ht) { deny all; }
 
+    # OverCMS URL masking — chowamy /wp/wp-admin/ za /admin/ i wp-login za /login.
+    # rewrite ... last zachowuje oryginalny URL w pasku adresu (klient widzi /admin/),
+    # a nginx wewnetrznie serwuje plik z /wp/wp-admin/. Bez blokowania /wp/wp-admin
+    # bo WordPress robi canonical redirecty na te sciezke i blokada powoduje petle.
+    location = /admin  { rewrite ^ /wp/wp-admin/    last; }
+    location = /admin/ { rewrite ^ /wp/wp-admin/    last; }
+    location = /login  { rewrite ^ /wp/wp-login.php last; }
+    location ^~ /admin/ {
+        rewrite ^/admin/(.*)\$ /wp/wp-admin/\$1 last;
+    }
+
     # WordPress core (Bedrock instaluje WP w web/wp/)
     location / {
         try_files \$uri \$uri/ /index.php?\$args;
