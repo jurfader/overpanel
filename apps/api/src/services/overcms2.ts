@@ -587,6 +587,14 @@ export async function updateOverCms2(domain: string): Promise<void> {
     )
   })
 
+  // 3b. Build React panelu — musi być przed rsync, żeby panel/dist trafił do installDir
+  await logStep('Build panelu React (overcms-panel)', async () => {
+    await runLong(
+      `cd ${esc(tmpDir)}/src/overcms-panel && npm ci --no-audit --no-fund --loglevel=error && npm run build`,
+      600_000
+    )
+  })
+
   // 4. Nadpisz pliki — zachowaj .env, uploads, db.sqlite, logs
   await logStep('Aktualizacja plików aplikacji', async () => {
     // Skopiuj wszystko poza tym co użytkownik zmodyfikował
@@ -595,6 +603,7 @@ export async function updateOverCms2(domain: string): Promise<void> {
       `rsync -a --delete ` +
       `--exclude='.env' ` +
       `--exclude='web/app/uploads/' ` +
+      `--exclude='web/app/themes/' ` +
       `--exclude='logs/' ` +
       `--exclude='.overcms2-version' ` +
       `${esc(tmpDir)}/src/ ${esc(installDir)}/`
