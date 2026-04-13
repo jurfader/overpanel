@@ -558,13 +558,16 @@ export async function updateOverCms2(domain: string): Promise<void> {
     }
   }
 
-  // 1. Backup .env i web/app/uploads (te się NIE zmieniają)
+  // 1. Backup .env, uploads i themes (zachowujemy motywy użytkownika, np. Divi)
   let latestCommit = 'unknown'
-  await logStep('Backup .env i uploads', async () => {
+  await logStep('Backup .env, uploads i themes', async () => {
     await run(`mkdir -p ${esc(tmpDir)}/backup`)
     await run(`cp ${esc(installDir)}/.env ${esc(tmpDir)}/backup/.env`)
     if (existsSync(`${installDir}/web/app/uploads`)) {
       await run(`cp -a ${esc(installDir)}/web/app/uploads ${esc(tmpDir)}/backup/uploads`)
+    }
+    if (existsSync(`${installDir}/web/app/themes`)) {
+      await run(`cp -a ${esc(installDir)}/web/app/themes ${esc(tmpDir)}/backup/themes`)
     }
   })
 
@@ -610,11 +613,14 @@ export async function updateOverCms2(domain: string): Promise<void> {
     )
   })
 
-  // 5. Przywróć .env i uploads (na wypadek gdyby rsync coś ruszył)
-  await logStep('Przywracanie .env i uploads', async () => {
+  // 5. Przywróć .env, uploads i themes
+  await logStep('Przywracanie .env, uploads i themes', async () => {
     await run(`cp ${esc(tmpDir)}/backup/.env ${esc(installDir)}/.env`)
     if (existsSync(`${tmpDir}/backup/uploads`)) {
       await run(`mkdir -p ${esc(installDir)}/web/app && cp -a ${esc(tmpDir)}/backup/uploads ${esc(installDir)}/web/app/`)
+    }
+    if (existsSync(`${tmpDir}/backup/themes`)) {
+      await run(`mkdir -p ${esc(installDir)}/web/app && cp -a ${esc(tmpDir)}/backup/themes ${esc(installDir)}/web/app/`)
     }
   })
 
