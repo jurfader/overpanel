@@ -607,6 +607,7 @@ export async function updateOverCms2(domain: string): Promise<void> {
       `--exclude='.env' ` +
       `--exclude='web/app/uploads/' ` +
       `--exclude='web/app/themes/' ` +
+      `--exclude='web/app/plugins/' ` +
       `--exclude='logs/' ` +
       `--exclude='.overcms2-version' ` +
       `${esc(tmpDir)}/src/ ${esc(installDir)}/`
