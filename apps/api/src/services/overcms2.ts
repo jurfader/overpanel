@@ -234,7 +234,7 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
     }
     // Wymaga node + npm
     await runLong(
-      `cd ${esc(installDir)}/overcms-panel && npm ci --no-audit --no-fund --loglevel=error && npm run build`,
+      `cd ${esc(installDir)}/overcms-panel && NODE_ENV=development npm ci --no-audit --no-fund --loglevel=error && npm run build`,
       600_000
     )
   })
@@ -590,7 +590,7 @@ export async function updateOverCms2(domain: string): Promise<void> {
   // 3b. Build React panelu — musi być przed rsync, żeby panel/dist trafił do installDir
   await logStep('Build panelu React (overcms-panel)', async () => {
     await runLong(
-      `cd ${esc(tmpDir)}/src/overcms-panel && npm ci --no-audit --no-fund --loglevel=error && npm run build`,
+      `cd ${esc(tmpDir)}/src/overcms-panel && NODE_ENV=development npm ci --no-audit --no-fund --loglevel=error && npm run build`,
       600_000
     )
   })
