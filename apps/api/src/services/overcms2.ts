@@ -296,6 +296,43 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
     )
   })
 
+  // 6a3. Mu-plugin fix dla Divi Theme Builder
+  // Divi rejestruje CPT et_header_layout/et_body_layout/et_footer_layout jako
+  // public: false → przy próbie załadowania VB w iframe pod /et_header_layout/.../
+  // WP zwraca 404 i VB wisi w nieskończonym loaderze. Ten mu-plugin wymusza
+  // publicly_queryable=true dla tych CPT żeby VB mógł je pobrać.
+  await logStep('Instalacja mu-plugin Divi Theme Builder fix', async () => {
+    const muPluginPath = `${installDir}/web/app/mu-plugins/overcms-divi-tb-fix.php`
+    const phpContent = `<?php
+/**
+ * Plugin Name: OverCMS Divi Theme Builder Fix
+ * Description: Wymusza publicly_queryable na CPT layoutow Divi Theme Builder.
+ *              Bez tego Visual Builder w iframe wisi w nieskonczonym loaderze.
+ */
+add_filter('register_post_type_args', function ($args, $post_type) {
+    $tb_types = ['et_header_layout', 'et_body_layout', 'et_footer_layout', 'et_template'];
+    if (in_array($post_type, $tb_types, true)) {
+        $args['public']              = true;
+        $args['publicly_queryable']  = true;
+        $args['exclude_from_search'] = true;
+        $args['show_in_nav_menus']   = false;
+    }
+    return $args;
+}, 99, 2);
+`
+    await writeFile(muPluginPath, phpContent, 'utf-8')
+    await run(`chown www-data:www-data ${esc(muPluginPath)} 2>/dev/null || true`)
+    // Re-flush rewrite rules po dodaniu mu-plugin
+    const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
+    const wpEnv =
+      `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST ` +
+      `-u WP_HOME -u WP_SITEURL -u WP_ENV `
+    await runLong(
+      `cd ${esc(installDir)} && ${wpEnv}${wp} rewrite flush --path=web/wp`,
+      30_000
+    )
+  })
+
   // 6b. Tytuł witryny (opcjonalnie nadpisz domyślny "OverCMS")
   // env -u DATABASE_URL: bez tego Bedrock próbuje sparsować DATABASE_URL OVERPANEL-a
   // (PostgreSQL DSN) i wp-cli wywala "Error establishing a database connection".
