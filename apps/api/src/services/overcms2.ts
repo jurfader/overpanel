@@ -277,6 +277,25 @@ export async function installOverCms2(options: OverCms2InstallOptions): Promise<
     await runLong(cmd, 600_000)
   })
 
+  // 6a2. Pretty permalinks — Divi Theme Builder ładuje layouty (header/footer/body)
+  // pod URL-em /et_header_layout/.../ etc. Z plain permalinks (?p=123) takie URL-e
+  // dostają 404 i Visual Builder w iframe nie ładuje się — pokazuje nieskończony
+  // loader. Ustawiamy postname structure + flush rewrite rules.
+  await logStep('Konfiguracja pretty permalinks (/%postname%/)', async () => {
+    const wp = process.getuid && process.getuid() === 0 ? 'wp --allow-root' : 'wp'
+    const wpEnv =
+      `env -u DATABASE_URL -u DB_NAME -u DB_USER -u DB_PASSWORD -u DB_HOST ` +
+      `-u WP_HOME -u WP_SITEURL -u WP_ENV `
+    await runLong(
+      `cd ${esc(installDir)} && ${wpEnv}${wp} option update permalink_structure '/%postname%/' --path=web/wp`,
+      30_000
+    )
+    await runLong(
+      `cd ${esc(installDir)} && ${wpEnv}${wp} rewrite flush --path=web/wp`,
+      30_000
+    )
+  })
+
   // 6b. Tytuł witryny (opcjonalnie nadpisz domyślny "OverCMS")
   // env -u DATABASE_URL: bez tego Bedrock próbuje sparsować DATABASE_URL OVERPANEL-a
   // (PostgreSQL DSN) i wp-cli wywala "Error establishing a database connection".
