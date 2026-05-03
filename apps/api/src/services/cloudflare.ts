@@ -29,8 +29,11 @@ async function cfFetch<T>(
   const json = await res.json() as { success: boolean; result: T; errors: unknown[] }
 
   if (!json.success) {
+    const detail = Array.isArray(json.errors) && json.errors.length
+      ? ': ' + json.errors.map((e: any) => `[${e?.code ?? '?'}] ${e?.message ?? JSON.stringify(e)}`).join('; ')
+      : ''
     throw new CloudflareError(
-      `Cloudflare API error on ${path}`,
+      `Cloudflare API error on ${path}${detail}`,
       json.errors
     )
   }
