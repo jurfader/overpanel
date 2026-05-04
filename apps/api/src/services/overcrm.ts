@@ -415,7 +415,8 @@ export async function checkOverCrmUpdate(domain: string): Promise<OverCrmUpdateI
     if (existsSync(versionFile)) {
       currentVersion = (await readFile(versionFile, 'utf-8')).trim()
     } else if (existsSync(`${installDir}/.git`)) {
-      const { stdout } = await execAsync(`git -C ${esc(installDir)} rev-parse --short HEAD`)
+      // -c safe.directory='*' — install dir należy do www-data, my (root) potrzebujemy ominąć dubious-ownership check
+      const { stdout } = await execAsync(`git -c safe.directory='*' -C ${esc(installDir)} rev-parse --short HEAD`)
       currentVersion = stdout.trim()
     }
 
@@ -477,12 +478,14 @@ export async function updateOverCrm(domain: string): Promise<void> {
   })
 
   // 2. Git pull (zachowuje lokalne zmiany w .env bo .env jest gitignored)
+  // -c safe.directory='*' — install dir należy do www-data, my (root) wymagamy
+  // ominięcia dubious-ownership check git'a. To inline (nie zmienia globalnego config).
   await logStep('Git pull', async () => {
     await runLong(
-      `cd ${esc(installDir)} && git fetch --depth 1 origin main && git reset --hard origin/main`,
+      `cd ${esc(installDir)} && git -c safe.directory='*' fetch --depth 1 origin main && git -c safe.directory='*' reset --hard origin/main`,
       120_000
     )
-    const { stdout } = await execAsync(`git -C ${esc(installDir)} rev-parse --short HEAD`)
+    const { stdout } = await execAsync(`git -c safe.directory='*' -C ${esc(installDir)} rev-parse --short HEAD`)
     latestCommit = stdout.trim()
     log.push(`  Nowa wersja: ${latestCommit}`)
   })
