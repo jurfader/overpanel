@@ -94,6 +94,9 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     // Walidacja klucza licencyjnego (overcms wymaga, overcms2/overcrm jeśli podany — opcjonalny)
     if ((siteType === 'overcms' || siteType === 'overcms2' || siteType === 'overcrm') && body.data.licenseKey?.trim()) {
       const licServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://51.38.137.199:3002'
+      // Mapowanie siteType → product na license server. overcms/overcms2 = 'overcms'
+      // (ten sam license-server product), overcrm = osobny 'overcrm'.
+      const expectedProduct = siteType === 'overcrm' ? 'overcrm' : 'overcms'
       try {
         const licRes = await fetch(`${licServerUrl}/customer/${encodeURIComponent(body.data.licenseKey.trim())}`)
         if (!licRes.ok) {
@@ -103,6 +106,14 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         const lic = licData?.data ?? licData
         if (lic.status !== 'active') {
           return reply.code(400).send({ success: false, error: `Licencja jest ${lic.status === 'revoked' ? 'odwołana' : lic.status === 'expired' ? 'wygasła' : 'nieaktywna'}` })
+        }
+        // Sprawdź product match — jeśli license server zwraca product, musi pasować do siteType.
+        // (Stare licencje bez kolumny `product` mają default 'overcms' po migracji 0002.)
+        if (lic.product && lic.product !== expectedProduct) {
+          return reply.code(400).send({
+            success: false,
+            error:   `Klucz jest dla produktu '${lic.product}', a próbujesz instalować '${expectedProduct}'. Użyj klucza dla właściwego produktu.`,
+          })
         }
         if (lic.maxInstallations && lic.activeCount >= lic.maxInstallations) {
           return reply.code(400).send({ success: false, error: `Osiągnięto limit instalacji (${lic.maxInstallations})` })
