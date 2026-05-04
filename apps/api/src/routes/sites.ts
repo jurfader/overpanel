@@ -20,12 +20,16 @@ async function getUserCfToken(userId: string): Promise<string | null> {
 
 const createSiteSchema = z.object({
   domain: z.string().min(3).regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain'),
-  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms', 'overcms2', 'openclaw']).default('php'),
+  siteType: z.enum(['php', 'nodejs', 'python', 'proxy', 'static', 'overcms', 'overcms2', 'overcrm', 'openclaw']).default('php'),
   adminUser: z.string().regex(/^[A-Za-z0-9_.@-]+$/).optional(),
   adminEmail: z.string().email().optional(),
   adminPassword: z.string().optional(),
   siteTitle: z.string().max(200).optional(),
   licenseKey: z.string().optional(),
+  // OVERCRM brand fields
+  brandName: z.string().max(100).optional(),
+  brandPrimary: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  brandSecondary: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   phpVersion: z.enum(['7.4', '8.0', '8.1', '8.2', '8.3']).default('8.3'),
   appPort: z.number().int().min(1024).max(65535).optional(),
   startCommand: z.string().max(200).optional(),
@@ -87,8 +91,8 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ success: false, error: 'Klucz licencyjny jest wymagany do instalacji OverCMS' })
     }
 
-    // Walidacja klucza licencyjnego (overcms wymaga, overcms2 jeśli podany — opcjonalny dla Divi)
-    if ((siteType === 'overcms' || siteType === 'overcms2') && body.data.licenseKey?.trim()) {
+    // Walidacja klucza licencyjnego (overcms wymaga, overcms2/overcrm jeśli podany — opcjonalny)
+    if ((siteType === 'overcms' || siteType === 'overcms2' || siteType === 'overcrm') && body.data.licenseKey?.trim()) {
       const licServerUrl = process.env.OVERCMS_LICENSE_SERVER_URL || 'http://51.38.137.199:3002'
       try {
         const licRes = await fetch(`${licServerUrl}/customer/${encodeURIComponent(body.data.licenseKey.trim())}`)
@@ -124,6 +128,16 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // OVERCRM wymaga email + hasło admina
+    if (siteType === 'overcrm') {
+      if (!body.data.adminEmail?.trim()) {
+        return reply.code(400).send({ success: false, error: 'Email administratora jest wymagany dla OVERCRM' })
+      }
+      if (!body.data.adminPassword || body.data.adminPassword.length < 8) {
+        return reply.code(400).send({ success: false, error: 'Hasło administratora (min. 8 znaków) jest wymagane dla OVERCRM' })
+      }
+    }
+
     // Klient może tworzyć tylko dla siebie
     const ownerId = caller.role === 'admin' && userId ? userId : caller.id
 
@@ -133,7 +147,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
 
     const documentRoot = siteType === 'overcms2'
       ? `/var/www/${domain}/web`
-      : `/var/www/${domain}/public`
+      : `/var/www/${domain}/public` // overcrm + standard PHP też używają public/
 
     // Stwórz rekord w DB
     const site = await prisma.site.create({
@@ -187,7 +201,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
         }
 
         // 2. Nginx vhost — type-aware
-        if (siteType === 'overcms' || siteType === 'openclaw' || siteType === 'overcms2') {
+        if (siteType === 'overcms' || siteType === 'openclaw' || siteType === 'overcms2' || siteType === 'overcrm') {
           // Apps z własnym vhostem dostają go dopiero po pomyślnej instalacji
         } else if (siteType === 'nodejs' || siteType === 'python' || siteType === 'proxy') {
           const port = appPort ?? 3000
@@ -196,7 +210,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
           // php, static — use standard PHP-FPM vhost (static ignores PHP blocks but that's harmless)
           await createNginxVhost({ domain, documentRoot, phpVersion })
         }
-        if (siteType !== 'overcms' && siteType !== 'openclaw' && siteType !== 'overcms2') {
+        if (siteType !== 'overcms' && siteType !== 'openclaw' && siteType !== 'overcms2' && siteType !== 'overcrm') {
           await reloadNginx()
         }
 
@@ -285,6 +299,47 @@ export async function sitesRoutes(fastify: FastifyInstance) {
             }
           } catch (err: any) {
             console.error(`[OverCMS2] Install failed for ${domain}:`, err.message)
+            await prisma.site.update({ where: { id: site.id }, data: { status: 'inactive' } })
+            return
+          }
+        }
+
+        // 2b3. OVERCRM (Laravel) installation
+        if (siteType === 'overcrm') {
+          try {
+            const { installOverCrm } = await import('../services/overcrm.js')
+            const { createNginxOverCrmVhost } = await import('../services/nginx.js')
+            const result = await installOverCrm({
+              domain,
+              adminEmail:    body.data.adminEmail || caller.email || `admin@${domain}`,
+              adminPassword: body.data.adminPassword!,
+              brandName:     body.data.brandName,
+              brandPrimary:  body.data.brandPrimary,
+              brandSecondary: body.data.brandSecondary,
+              licenseKey:    body.data.licenseKey,
+            })
+            await createNginxOverCrmVhost({ domain, installDir: result.installDir, phpVersion })
+            await reloadNginx()
+            console.log(`[OVERCRM] Installed for ${domain}: ${result.appUrl}`)
+
+            // Zarejestruj bazę MySQL w panelu
+            try {
+              await prisma.database.create({
+                data: {
+                  name: result.dbName,
+                  engine: 'mysql',
+                  dbUser: result.dbUser,
+                  host: 'localhost',
+                  port: 3306,
+                  userId: ownerId,
+                  siteId: site.id,
+                },
+              })
+            } catch (dbErr: any) {
+              console.warn(`[OVERCRM] Failed to register MySQL DB:`, dbErr.message)
+            }
+          } catch (err: any) {
+            console.error(`[OVERCRM] Install failed for ${domain}:`, err.message)
             await prisma.site.update({ where: { id: site.id }, data: { status: 'inactive' } })
             return
           }
@@ -403,13 +458,15 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     return reply.code(201).send({ success: true, data: site })
   })
 
-  // GET /api/sites/install-status/:domain — live install progress (OverCMS, OverCMS 2.0, OpenClaw)
+  // GET /api/sites/install-status/:domain — live install progress (OverCMS, OverCMS 2.0, OVERCRM, OpenClaw)
   fastify.get('/install-status/:domain', { preHandler: [authMiddleware] }, async (request, reply) => {
     const { domain } = request.params as { domain: string }
-    const { readInstallStatus: readOverCms } = await import('../services/overcms.js')
+    const { readInstallStatus: readOverCms }  = await import('../services/overcms.js')
     const { readInstallStatus: readOverCms2 } = await import('../services/overcms2.js')
+    const { readInstallStatus: readOverCrm }  = await import('../services/overcrm.js')
     const { readInstallStatus: readOpenClaw } = await import('../services/openclaw.js')
-    const data = (await readOverCms2(domain))
+    const data = (await readOverCrm(domain))
+      ?? (await readOverCms2(domain))
       ?? (await readOverCms(domain))
       ?? (await readOpenClaw(domain))
     return reply.send({ success: true, data })
@@ -423,6 +480,7 @@ export async function sitesRoutes(fastify: FastifyInstance) {
     const { readFile } = await import('fs/promises')
     // Try overcms2 first, then overcms
     const candidates = [
+      `/tmp/overcrm-update-${safe}.json`,
       `/tmp/overcms2-update-${safe}.json`,
       `/tmp/overcms-update-${safe}.json`,
     ]
@@ -489,6 +547,17 @@ export async function sitesRoutes(fastify: FastifyInstance) {
       }
     }
 
+    if (site.siteType === 'overcrm') {
+      try {
+        const { checkOverCrmUpdate } = await import('../services/overcrm.js')
+        const info = await checkOverCrmUpdate(site.domain)
+        return reply.send({ success: true, data: { ...info, type: 'overcrm' } })
+      } catch (err: any) {
+        console.warn(`[OVERCRM] check-update failed for ${site.domain}:`, err.message)
+        return reply.send({ success: true, data: { hasUpdate: false, type: 'overcrm', error: err.message } })
+      }
+    }
+
     if (site.siteType === 'overcms2') {
       try {
         const { checkOverCms2Update } = await import('../services/overcms2.js')
@@ -543,6 +612,20 @@ export async function sitesRoutes(fastify: FastifyInstance) {
           console.log(`[OverCMS2] Updated ${site.domain}`)
         } catch (err: any) {
           console.error(`[OverCMS2] Update failed for ${site.domain}:`, err.message)
+        }
+      })
+      return
+    }
+
+    if (site.siteType === 'overcrm') {
+      reply.code(202).send({ success: true, data: { message: 'Aktualizacja OVERCRM w toku...' } })
+      setImmediate(async () => {
+        try {
+          const { updateOverCrm } = await import('../services/overcrm.js')
+          await updateOverCrm(site.domain)
+          console.log(`[OVERCRM] Updated ${site.domain}`)
+        } catch (err: any) {
+          console.error(`[OVERCRM] Update failed for ${site.domain}:`, err.message)
         }
       })
       return

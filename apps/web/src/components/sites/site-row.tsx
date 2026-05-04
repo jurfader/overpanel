@@ -126,7 +126,7 @@ function PhpSettingsModal({ siteId, siteDomain, onClose }: { siteId: string; sit
 
 interface UpdateInfo {
   hasUpdate: boolean
-  type: 'wordpress' | 'overcms' | 'overcms2' | null
+  type: 'wordpress' | 'overcms' | 'overcms2' | 'overcrm' | null
   currentVersion?: string
   latestVersion?: string
   commits?: number
@@ -146,7 +146,7 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
   const updatePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
 
-  const hasCms = site.hasWordpress || site.siteType === 'overcms' || site.siteType === 'overcms2' || site.siteType === 'openclaw'
+  const hasCms = site.hasWordpress || site.siteType === 'overcms' || site.siteType === 'overcms2' || site.siteType === 'overcrm' || site.siteType === 'openclaw'
 
   useEffect(() => {
     if (!hasCms) return
@@ -291,6 +291,8 @@ export function SiteRow({ site, isAdmin, onRefetch }: SiteRowProps) {
                 ? `WP ${updateInfo.latestVersion}`
                 : updateInfo.type === 'overcms2'
                 ? `OverCMS 2.0 ${updateInfo.latestVersion ?? ''}`
+                : updateInfo.type === 'overcrm'
+                ? `OVERCRM ${updateInfo.latestVersion ?? ''}`
                 : `${updateInfo.commits ?? ''} zmian`}
             </Badge>
           )}

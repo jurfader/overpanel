@@ -9,7 +9,7 @@ import { Globe, Lock, ArrowLeft, X, Loader2, CheckCircle2, AlertCircle } from 'l
 
 // ── Site types ─────────────────────────────────────────────────────────────────
 
-type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy' | 'overcms' | 'overcms2' | 'openclaw'
+type SiteType = 'wordpress' | 'php' | 'nodejs' | 'static' | 'python' | 'proxy' | 'overcms' | 'overcms2' | 'overcrm' | 'openclaw'
 
 interface SiteTypeOption {
   id: SiteType
@@ -108,6 +108,25 @@ const SITE_TYPES: SiteTypeOption[] = [
     ),
   },
   {
+    id: 'overcrm',
+    label: 'OVERCRM',
+    description: 'CRM dla małych/średnich firm B2B — Laravel + Vue 3 + Inertia',
+    available: true,
+    accent: '#E91E8C',
+    icon: (
+      <svg viewBox="0 0 32 32" fill="none" className="w-10 h-10">
+        <defs>
+          <linearGradient id="overcrm-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#E91E8C" />
+            <stop offset="1" stopColor="#9333EA" />
+          </linearGradient>
+        </defs>
+        <rect x="3" y="3" width="26" height="26" rx="6" fill="url(#overcrm-grad)" fillOpacity="0.15" stroke="url(#overcrm-grad)" strokeWidth="1.5" strokeOpacity="0.6" />
+        <text x="16" y="20" textAnchor="middle" fill="#E91E8C" fontSize="7" fontWeight="800" fontFamily="system-ui">CRM</text>
+      </svg>
+    ),
+  },
+  {
     id: 'openclaw',
     label: 'OpenClaw AI',
     description: 'Asystent AI — Docker + WebSocket gateway',
@@ -195,6 +214,14 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   const [cms2SiteTitle, setCms2SiteTitle] = useState('')
   const [cms2LicenseKey, setCms2LicenseKey] = useState('')
 
+  // OVERCRM-specific
+  const [crmAdminEmail, setCrmAdminEmail] = useState('')
+  const [crmAdminPassword, setCrmAdminPassword] = useState('')
+  const [crmLicenseKey, setCrmLicenseKey] = useState('')
+  const [crmBrandName, setCrmBrandName] = useState('')
+  const [crmBrandPrimary, setCrmBrandPrimary] = useState('#E91E8C')
+  const [crmBrandSecondary, setCrmBrandSecondary] = useState('#9B26D9')
+
   // OpenClaw-specific
   const [openaiKey, setOpenaiKey] = useState('')
   const [anthropicKey, setAnthropicKey] = useState('')
@@ -279,6 +306,12 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
       setCms2AdminPassword('')
       setCms2SiteTitle('')
       setCms2LicenseKey('')
+      setCrmAdminEmail('')
+      setCrmAdminPassword('')
+      setCrmLicenseKey('')
+      setCrmBrandName('')
+      setCrmBrandPrimary('#E91E8C')
+      setCrmBrandSecondary('#9B26D9')
       setInstallLog([])
       setInstallStatus('running')
       setInstallStep('')
@@ -346,6 +379,22 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
         setLoading(false)
         startPolling(domain)
         return
+      } else if (siteType === 'overcrm') {
+        await api.post('/api/sites', {
+          domain,
+          siteType: 'overcrm',
+          enableSsl,
+          phpVersion: '8.3',
+          adminEmail: crmAdminEmail,
+          adminPassword: crmAdminPassword,
+          licenseKey: crmLicenseKey || undefined,
+          brandName: crmBrandName || undefined,
+          brandPrimary: crmBrandPrimary || undefined,
+          brandSecondary: crmBrandSecondary || undefined,
+        })
+        setLoading(false)
+        startPolling(domain)
+        return
       } else if (siteType === 'openclaw') {
         await api.post('/api/sites', {
           domain,
@@ -389,6 +438,7 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
   const isWordPress = siteType === 'wordpress'
   const isOverCms = siteType === 'overcms'
   const isOverCms2 = siteType === 'overcms2'
+  const isOverCrm = siteType === 'overcrm'
   const isOpenClaw = siteType === 'openclaw'
   const isStatic = siteType === 'static'
   const isNodeJs = siteType === 'nodejs'
@@ -484,7 +534,9 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
                     <p className="text-xs text-green-400/70 mt-0.5">
                       {siteType === 'overcms2'
                         ? <>Panel admina: <code className="text-green-300">https://{domain}/wp/wp-admin/</code></>
-                        : <>Adres: <code className="text-green-300">https://{domain}</code></>}
+                        : siteType === 'overcrm'
+                          ? <>Logowanie: <code className="text-green-300">https://{domain}/login</code></>
+                          : <>Adres: <code className="text-green-300">https://{domain}</code></>}
                     </p>
                   </div>
                 </div>
@@ -716,6 +768,99 @@ export function CreateSiteModal({ open, onClose, onSuccess }: CreateSiteModalPro
 
                     <p className="text-[10px] text-[var(--text-muted)]">
                       Instalator pobierze najnowszy release z GitHub, utworzy bazę MySQL, skonfiguruje WordPress (Bedrock) i włączy panel React pod adresem <code className="text-[var(--text-secondary)]">/wp/wp-admin/</code>.
+                    </p>
+                  </>
+                )}
+
+                {/* OVERCRM fields */}
+                {isOverCrm && (
+                  <>
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">Administrator</p>
+                      <div className="space-y-3">
+                        <FieldInput
+                          label="E-mail administratora"
+                          value={crmAdminEmail}
+                          onChange={setCrmAdminEmail}
+                          placeholder="admin@example.com"
+                          type="email"
+                          required
+                        />
+                        <FieldInput
+                          label="Hasło administratora"
+                          value={crmAdminPassword}
+                          onChange={setCrmAdminPassword}
+                          placeholder="Min. 8 znaków"
+                          type="password"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">Branding (opcjonalnie)</p>
+                      <div className="space-y-3">
+                        <FieldInput
+                          label="Nazwa firmy / produktu"
+                          value={crmBrandName}
+                          onChange={setCrmBrandName}
+                          placeholder="np. Moja Firma CRM"
+                          hint="Wyświetlana w nagłówku, e-mailach, tytule strony. Można zmienić później w Ustawieniach."
+                        />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Kolor główny</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={crmBrandPrimary}
+                                onChange={(e) => setCrmBrandPrimary(e.target.value)}
+                                className="h-9 w-12 rounded border border-white/10 bg-transparent cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                value={crmBrandPrimary}
+                                onChange={(e) => setCrmBrandPrimary(e.target.value)}
+                                placeholder="#E91E8C"
+                                className="flex-1 h-9 px-3 rounded-md bg-white/5 border border-white/10 text-[var(--text-primary)] text-sm font-mono focus:outline-none focus:border-[var(--color-primary)]"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Kolor dodatkowy</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={crmBrandSecondary}
+                                onChange={(e) => setCrmBrandSecondary(e.target.value)}
+                                className="h-9 w-12 rounded border border-white/10 bg-transparent cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                value={crmBrandSecondary}
+                                onChange={(e) => setCrmBrandSecondary(e.target.value)}
+                                placeholder="#9B26D9"
+                                className="flex-1 h-9 px-3 rounded-md bg-white/5 border border-white/10 text-[var(--text-primary)] text-sm font-mono focus:outline-none focus:border-[var(--color-primary)]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/[0.06]">
+                      <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-3">Licencja OVERCRM (opcjonalnie)</p>
+                      <FieldInput
+                        label="Klucz licencyjny"
+                        value={crmLicenseKey}
+                        onChange={setCrmLicenseKey}
+                        placeholder="XXXX-XXXX-XXXX-XXXX"
+                        hint="Z kluczem instalator zarejestruje domenę na serwerze licencji OVERMEDIA. Bez klucza CRM zadziała w trybie demo (do czasu wpisania klucza w Ustawieniach)."
+                      />
+                    </div>
+
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      Instalator sklonuje OVERCRM z GitHub, utworzy bazę MySQL, zbuduje frontend (Vite) i skonfiguruje cron dla queue worker. Branding można zmienić później w panelu — Ustawienia → Branding.
                     </p>
                   </>
                 )}
