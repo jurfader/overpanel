@@ -296,13 +296,19 @@ export async function installOverCrm(options: OverCrmInstallOptions): Promise<Ov
   })
 
   // 8. Pierwszy admin (INSERT do users)
+  // Bcrypt hash zawiera znaki '$' (np. $2y$12$...). NIE wolno wstawiać go do
+  // mysql -e "..." (double-quoted bash) — bash interpoluje $2y jako zmienną
+  // i hash zostaje skorumpowany. Heredoc <<'EOF' (single-quoted) wyłącza
+  // wszystkie shell substitutions — bezpieczne dla każdego znaku.
   await logStep('Tworzenie pierwszego administratora', async () => {
-    const passwordHash = bcryptHash(adminPassword).replace(/'/g, "\\'")
+    const passwordHash = bcryptHash(adminPassword).replace(/'/g, "''")  // SQL-escape '
+    const sqlEmail = adminEmail.replace(/'/g, "''")
     const sql =
-      `INSERT INTO users (name, email, password, role, status, email_verified_at, created_at, updated_at) ` +
-      `VALUES ('Administrator', '${adminEmail}', '${passwordHash}', 'admin', 'active', NOW(), NOW(), NOW()) ` +
+      `INSERT INTO users (name, email, password, role, status, email_verified_at, created_at, updated_at)\n` +
+      `VALUES ('Administrator', '${sqlEmail}', '${passwordHash}', 'admin', 'active', NOW(), NOW(), NOW())\n` +
       `ON DUPLICATE KEY UPDATE password=VALUES(password), role='admin', status='active', updated_at=NOW();`
-    await runLong(`mysql ${esc(dbName)} -e "${sql}"`, 30_000)
+    // Heredoc <<'CRMSQL' — single-quoted delimiter wyłącza interpolation $vars
+    await runLong(`mysql ${esc(dbName)} <<'CRMSQL'\n${sql}\nCRMSQL`, 30_000)
   })
 
   // 9. License activation
