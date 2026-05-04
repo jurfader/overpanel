@@ -17,9 +17,12 @@ import {
   Shield, AlertCircle, CheckCircle2, XCircle, Users,
 } from 'lucide-react'
 
+type Product = 'overcms' | 'overcrm'
+
 interface License {
   id: string
   key: string
+  product?: Product
   plan: string
   status: string
   buyerEmail: string
@@ -45,6 +48,10 @@ function planLabel(plan: string) {
   }
 }
 
+function productLabel(product?: Product | string) {
+  return product === 'overcrm' ? 'OVERCRM' : 'OverCMS'
+}
+
 function statusVariant(status: string): 'success' | 'warning' | 'error' | 'neutral' {
   switch (status) {
     case 'active': return 'success'
@@ -54,7 +61,8 @@ function statusVariant(status: string): 'success' | 'warning' | 'error' | 'neutr
   }
 }
 
-function CreateLicenseModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function CreateLicenseModal({ defaultProduct, onClose, onSuccess }: { defaultProduct?: Product; onClose: () => void; onSuccess: () => void }) {
+  const [product, setProduct] = useState<Product>(defaultProduct ?? 'overcms')
   const [plan, setPlan] = useState('solo')
   const [buyerEmail, setBuyerEmail] = useState('')
   const [buyerName, setBuyerName] = useState('')
@@ -70,6 +78,7 @@ function CreateLicenseModal({ onClose, onSuccess }: { onClose: () => void; onSuc
     setError('')
     try {
       const result = await api.post<{ data: License }>('/api/licenses', {
+        product,
         plan,
         buyerEmail,
         buyerName: buyerName || undefined,
@@ -114,13 +123,40 @@ function CreateLicenseModal({ onClose, onSuccess }: { onClose: () => void; onSuc
   }
 
   return (
-    <Modal open onClose={onClose} title="Nowa licencja OverCMS">
+    <Modal open onClose={onClose} title={`Nowa licencja ${productLabel(product)}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
           </div>
         )}
+
+        {/* Product selector — pick OVERMEDIA product */}
+        <div>
+          <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-2">Produkt</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['overcms', 'overcrm'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setProduct(p)}
+                className={
+                  'px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ' +
+                  (product === p
+                    ? 'bg-gradient-to-br from-[#E91E8C]/20 to-[#9333EA]/20 border-[#E91E8C]/50 text-[var(--text-primary)]'
+                    : 'bg-white/[0.03] border-white/10 text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text-secondary)]')
+                }
+              >
+                {productLabel(p)}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+            {product === 'overcrm'
+              ? 'Klucz zadziała tylko dla instalacji OVERCRM (Laravel CRM).'
+              : 'Klucz zadziała dla OverCMS / OverCMS 2.0 (WordPress + React).'}
+          </p>
+        </div>
 
         <Select label="Plan" value={plan} onChange={(e) => setPlan(e.target.value)}>
           <option value="trial">Trial (14 dni, 1 instalacja)</option>
@@ -176,14 +212,29 @@ function CreateLicenseModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 }
 
 export default function LicensesPage() {
+  const [productFilter, setProductFilter] = useState<'all' | Product>('all')
   const { data: licensesData, loading, refetch } = useApi<License[]>('/api/licenses')
   const { data: statsData } = useApi<LicenseStats>('/api/licenses/stats')
 
   const [showCreate, setShowCreate] = useState(false)
+  const [createDefaultProduct, setCreateDefaultProduct] = useState<Product>('overcms')
   const [showKey, setShowKey] = useState<string | null>(null)
 
-  const licenses = Array.isArray(licensesData) ? licensesData : []
+  const allLicenses = Array.isArray(licensesData) ? licensesData : []
+  const licenses = productFilter === 'all'
+    ? allLicenses
+    : allLicenses.filter((l) => (l.product ?? 'overcms') === productFilter)
   const stats = statsData
+
+  const counts = {
+    overcms: allLicenses.filter((l) => (l.product ?? 'overcms') === 'overcms').length,
+    overcrm: allLicenses.filter((l) => (l.product ?? 'overcms') === 'overcrm').length,
+  }
+
+  function openCreate(product: Product) {
+    setCreateDefaultProduct(product)
+    setShowCreate(true)
+  }
 
   const handleRevoke = async (key: string) => {
     if (!confirm(`Unieważnić licencję ${key}?`)) return
@@ -199,7 +250,7 @@ export default function LicensesPage() {
   if (!loading && !licensesData) {
     return (
       <div className="min-h-screen">
-        <Topbar title="Licencje OverCMS" subtitle="Zarządzanie licencjami" />
+        <Topbar title="Licencje OVERMEDIA" subtitle="Zarządzanie licencjami" />
         <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center">
             <Shield className="w-7 h-7 text-red-400" />
@@ -214,7 +265,7 @@ export default function LicensesPage() {
 
   return (
     <div className="min-h-screen">
-      <Topbar title="Licencje OverCMS" subtitle={`${licenses.length} licencji`} />
+      <Topbar title="Licencje OVERMEDIA" subtitle={`${allLicenses.length} licencji (OverCMS: ${counts.overcms}, OVERCRM: ${counts.overcrm})`} />
 
       <div className="p-6 space-y-6">
 
@@ -257,19 +308,40 @@ export default function LicensesPage() {
           </div>
         )}
 
+        {/* Filter tabs */}
+        <div className="inline-flex bg-white/[0.04] border border-white/10 rounded-xl p-1">
+          {(['all', 'overcms', 'overcrm'] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setProductFilter(p)}
+              className={
+                'px-4 py-1.5 rounded-lg text-sm font-medium transition-all ' +
+                (productFilter === p
+                  ? 'bg-gradient-to-br from-[#E91E8C] to-[#9333EA] text-white shadow'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]')
+              }
+            >
+              {p === 'all' ? `Wszystkie (${allLicenses.length})` : p === 'overcms' ? `OverCMS (${counts.overcms})` : `OVERCRM (${counts.overcrm})`}
+            </button>
+          ))}
+        </div>
+
         {/* License list */}
         <Card>
           <CardHeader>
             <div className="w-8 h-8 rounded-xl bg-[var(--primary)]/10 flex items-center justify-center">
               <Key className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <CardTitle>Licencje</CardTitle>
+            <CardTitle>Licencje{productFilter !== 'all' ? ` ${productLabel(productFilter)}` : ''}</CardTitle>
             <div className="ml-auto flex gap-2">
               <Button variant="secondary" size="sm" onClick={() => refetch()}>
                 <RefreshCw className="w-4 h-4" />
               </Button>
-              <Button size="sm" onClick={() => setShowCreate(true)}>
-                <Plus className="w-4 h-4" /> Nowa licencja
+              <Button variant="secondary" size="sm" onClick={() => openCreate('overcms')}>
+                <Plus className="w-4 h-4" /> OverCMS
+              </Button>
+              <Button size="sm" onClick={() => openCreate('overcrm')}>
+                <Plus className="w-4 h-4" /> OVERCRM
               </Button>
             </div>
           </CardHeader>
@@ -280,6 +352,7 @@ export default function LicensesPage() {
               <div className="space-y-1">
                 <div className="hidden lg:flex items-center gap-4 px-4 py-2 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">
                   <span className="w-44">Klucz</span>
+                  <span className="w-24">Produkt</span>
                   <span className="flex-1">Kupujący</span>
                   <span className="w-20">Plan</span>
                   <span className="w-16">Aktywacji</span>
@@ -300,6 +373,11 @@ export default function LicensesPage() {
                         </button>
                       </div>
                     </div>
+                    <span className="hidden lg:block w-24">
+                      <Badge variant={(lic.product ?? 'overcms') === 'overcrm' ? 'brand' : 'neutral'}>
+                        {productLabel(lic.product)}
+                      </Badge>
+                    </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-[var(--text-primary)] truncate">{lic.buyerEmail}</p>
                       {lic.buyerName && <p className="text-xs text-[var(--text-muted)] truncate">{lic.buyerName}</p>}
@@ -333,6 +411,7 @@ export default function LicensesPage() {
 
       {showCreate && (
         <CreateLicenseModal
+          defaultProduct={createDefaultProduct}
           onClose={() => setShowCreate(false)}
           onSuccess={() => { refetch(); }}
         />

@@ -50,9 +50,13 @@ export async function licensesRoutes(fastify: FastifyInstance) {
     return
   }
 
-  // GET /api/licenses — list all licenses
-  fastify.get('/', { preHandler: [adminOnly] }, async (_req, reply) => {
-    const result = await proxyToLicenseServer('/admin/licenses', 'GET')
+  // GET /api/licenses — list all licenses (optional ?product=overcms|overcrm filter)
+  fastify.get('/', { preHandler: [adminOnly] }, async (req, reply) => {
+    const product = (req.query as { product?: string })?.product
+    const path = product === 'overcms' || product === 'overcrm'
+      ? `/admin/licenses?product=${product}`
+      : '/admin/licenses'
+    const result = await proxyToLicenseServer(path, 'GET')
     return reply.code(result.status).send(result.data)
   })
 
@@ -72,6 +76,7 @@ export async function licensesRoutes(fastify: FastifyInstance) {
   // POST /api/licenses — create new license
   fastify.post('/', { preHandler: [adminOnly] }, async (request, reply) => {
     const schema = z.object({
+      product: z.enum(['overcms', 'overcrm']).default('overcms'),
       plan: z.enum(['trial', 'solo', 'agency']).default('trial'),
       buyerEmail: z.string().email(),
       buyerName: z.string().optional(),
