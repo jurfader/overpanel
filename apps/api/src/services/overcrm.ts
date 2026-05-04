@@ -212,13 +212,16 @@ export async function installOverCrm(options: OverCrmInstallOptions): Promise<Ov
   })
 
   // 4. NPM install + Vite build
+  // NODE_ENV=development MUSI być, bo OVERPANEL biegnie pod NODE_ENV=production —
+  // npm ci wtedy pomija devDependencies (w tym laravel-vite-plugin), a vite build
+  // ich potrzebuje. Po zbudowaniu Vite sam wstrzykuje NODE_ENV=production do bundle.
   await logStep('Build frontend (npm ci + npm run build)', async () => {
     await runLong(
-      `cd ${esc(installDir)} && npm ci --no-audit --no-fund --loglevel=error`,
+      `cd ${esc(installDir)} && NODE_ENV=development npm ci --no-audit --no-fund --loglevel=error`,
       600_000
     )
     await runLong(
-      `cd ${esc(installDir)} && npm run build`,
+      `cd ${esc(installDir)} && NODE_ENV=production npm run build`,
       600_000
     )
   })
@@ -493,10 +496,10 @@ export async function updateOverCrm(domain: string): Promise<void> {
     )
   })
 
-  // 4. NPM build
+  // 4. NPM build (j.w. — NODE_ENV=development dla npm ci)
   await logStep('Build frontend', async () => {
     await runLong(
-      `cd ${esc(installDir)} && npm ci --no-audit --no-fund --loglevel=error && npm run build`,
+      `cd ${esc(installDir)} && NODE_ENV=development npm ci --no-audit --no-fund --loglevel=error && NODE_ENV=production npm run build`,
       600_000
     )
   })
