@@ -19,7 +19,7 @@
 
 import { run, esc, sq } from './shell.js'
 import { randomBytes, createHash } from 'crypto'
-import { exec } from 'child_process'
+import { exec, execSync } from 'child_process'
 import { promisify } from 'util'
 import { writeFile, readFile } from 'fs/promises'
 import { existsSync } from 'fs'
@@ -66,9 +66,8 @@ function generatePassword(len = 24): string {
 function bcryptHash(password: string): string {
   // Wywołujemy php-cli do bcrypt — Laravel używa cost 12.
   // Zwraca hash do bezpośredniego INSERT-a w MySQL.
-  // (synchronously via php -r — szybciej niż dodawać dependency bcryptjs do PHP hashy)
+  // execSync zaimportowany na górze pliku (ESM nie ma `require`).
   const escaped = password.replace(/'/g, "\\'")
-  const { execSync } = require('child_process') as typeof import('child_process')
   return execSync(`php -r "echo password_hash('${escaped}', PASSWORD_BCRYPT, ['cost' => 12]);"`).toString()
 }
 
