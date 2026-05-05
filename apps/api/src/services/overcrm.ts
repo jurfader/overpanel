@@ -31,6 +31,19 @@ const OVERCRM_REPO_SSH = 'git@github.com:jurfader/overcrm.git'
 const WWW_ROOT = '/var/www'
 const INSTALL_STATUS_DIR = '/tmp'
 
+/**
+ * ED25519 public key license-servera (raw 32 bytes, base64).
+ * Współny dla wszystkich instalacji OVERCRM — odpowiada prywatnemu kluczowi
+ * w env LICENSE_SIGNING_KEY na license-server VPS (/opt/overcms-license).
+ *
+ * Klient OVERCRM weryfikuje każdą odpowiedź licence-serwera tym kluczem
+ * (sodium_crypto_sign_verify_detached). Bez tego env aplikacja w produkcji
+ * fail-closed odrzuci wszystkie odpowiedzi.
+ *
+ * Override przez env: OVERCRM_LICENSE_SIGNING_PUBLIC_KEY w OVERPANEL.
+ */
+const OVERCRM_LICENSE_PUBLIC_KEY_DEFAULT = 'yQpvyOLQEQ8UU5BKIMcZrEz5SxKdJT1iCExu7hnvNrQ='
+
 // ── Install status helpers (kompatybilne z routes/sites.ts install-status) ──
 
 export interface InstallStatus {
@@ -118,6 +131,7 @@ export async function installOverCrm(options: OverCrmInstallOptions): Promise<Ov
   const safeDomain = domain.replace(/[^a-z0-9.-]/g, '')
   const installationId = randomBytes(16).toString('hex')
   const licenseServerUrl = process.env['OVERCMS_LICENSE_SERVER_URL'] ?? 'http://51.38.137.199:3002'
+  const licenseSigningPublicKey = process.env['OVERCRM_LICENSE_SIGNING_PUBLIC_KEY'] ?? OVERCRM_LICENSE_PUBLIC_KEY_DEFAULT
 
   if (!safeDomain || safeDomain !== domain) {
     throw new Error(`Niepoprawna domena: ${domain}`)
@@ -273,10 +287,16 @@ export async function installOverCrm(options: OverCrmInstallOptions): Promise<Ov
     if (brandSecondary) await setEnv('BRAND_SECONDARY', brandSecondary)
 
     if (licenseKey?.trim()) {
-      await setEnv('OVERCRM_LICENSE_KEY',  licenseKey.trim())
-      await setEnv('LICENSE_SERVER_URL',   licenseServerUrl)
-      await setEnv('OVERCRM_INSTALL_ID',   installationId)
+      // Tylko informacyjne — OVERCRM trzyma klucz w DB Settings (zaszyfrowany HMAC
+      // state lock'iem). Zapis do .env jest dla operatora żeby mógł zobaczyć w cat .env.
+      await setEnv('OVERCRM_LICENSE_KEY', licenseKey.trim())
     }
+
+    // License client config — zawsze (nawet bez podania klucza w install: user
+    // wpisze go potem w UI /license, ale URL + public key muszą być w env).
+    // installation_id NIE idzie do env — OVERCRM generuje własny UUID4 i trzyma w DB.
+    await setEnv('LICENSE_SERVER_URL',          licenseServerUrl)
+    await setEnv('LICENSE_SIGNING_PUBLIC_KEY',  licenseSigningPublicKey)
   })
 
   // 7. Laravel boot: key + storage + migrate
@@ -311,26 +331,27 @@ export async function installOverCrm(options: OverCrmInstallOptions): Promise<Ov
     await runLong(`mysql ${esc(dbName)} <<'CRMSQL'\n${sql}\nCRMSQL`, 30_000)
   })
 
-  // 9. License activation
+  // 9. License activation — wywołane z OVERCRM żeby:
+  //   (a) license-server zarejestrował aktywację dla domeny
+  //   (b) OVERCRM zapisał do swojego DB (license_key + status + signature + HMAC state lock)
+  //   (c) admin po pierwszym logowaniu od razu trafił na dashboard, bez ekranu /license
+  // Bez tego flow: OVERCRM po install ma status='missing' → middleware blokuje → user
+  // musi wpisać klucz drugi raz w UI. Dziwne UX.
   if (licenseKey?.trim()) {
     await logStep('Aktywacja licencji OVERCRM', async () => {
-      const res = await fetch(`${licenseServerUrl}/activate`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ licenseKey: licenseKey.trim(), domain, installationId }),
-      })
-      if (!res.ok) {
-        const err = await res.text().catch(() => '')
-        throw new Error(`License activation failed (${res.status}): ${err.slice(0, 200)}`)
-      }
-      const data = await res.json() as { plan?: string }
-      log.push(`  Plan: ${data.plan ?? 'unknown'}`)
+      // sq() = single-quote escape dla bash; klucz zawiera tylko [A-Z0-9-]
+      // ale safeguard nigdy nie szkodzi
+      await runLong(
+        `cd ${esc(installDir)} && sudo -u www-data php artisan license:activate ${sq(licenseKey.trim())}`,
+        30_000
+      )
     }).catch((err: any) => {
-      // Niefatalne — kontynuuj instalację, klient sam aktywuje przez UI
+      // Niefatalne — kontynuuj instalację, klient sam aktywuje przez UI /license
       log.push(`  ⚠ Aktywacja licencji nieudana (non-fatal): ${err?.message?.slice(0, 200) ?? 'unknown'}`)
+      log.push(`    Admin po pierwszym logowaniu zobaczy ekran /license — może wpisać klucz ręcznie.`)
     })
   } else {
-    log.push(`  ℹ Brak klucza licencyjnego — pomijam aktywację. Klient wpisze klucz w panelu.`)
+    log.push(`  ℹ Brak klucza licencyjnego — pomijam aktywację. Klient wpisze klucz w panelu /license po pierwszym logowaniu.`)
   }
 
   // 10. Optimize
@@ -494,6 +515,26 @@ export async function updateOverCrm(domain: string): Promise<void> {
     const { stdout } = await execAsync(`git -c safe.directory='*' -C ${esc(installDir)} rev-parse --short HEAD`)
     latestCommit = stdout.trim()
     log.push(`  Nowa wersja: ${latestCommit}`)
+  })
+
+  // 2.5. Backfill brakujących env vars (license signing key, license server url) —
+  // istniejące instalacje sprzed Etapu 1 zabezpieczeń nie mają tych w .env, a
+  // OVERCRM w produkcji jest fail-closed bez nich.
+  await logStep('Uzupełnianie .env (license public key)', async () => {
+    const licenseServerUrl = process.env['OVERCMS_LICENSE_SERVER_URL'] ?? 'http://51.38.137.199:3002'
+    const licenseSigningPublicKey = process.env['OVERCRM_LICENSE_SIGNING_PUBLIC_KEY'] ?? OVERCRM_LICENSE_PUBLIC_KEY_DEFAULT
+
+    const setEnv = async (key: string, value: string): Promise<void> => {
+      const escapedValue = value.replace(/[\\&|/]/g, '\\$&')
+      await run(
+        `grep -q '^${key}=' ${esc(installDir)}/.env ` +
+        `&& sed -i 's|^${key}=.*|${key}=${escapedValue}|' ${esc(installDir)}/.env ` +
+        `|| echo '${key}=${escapedValue}' >> ${esc(installDir)}/.env`
+      )
+    }
+
+    await setEnv('LICENSE_SERVER_URL',          licenseServerUrl)
+    await setEnv('LICENSE_SIGNING_PUBLIC_KEY',  licenseSigningPublicKey)
   })
 
   // 3. Composer install
